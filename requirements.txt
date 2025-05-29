@@ -1,0 +1,11 @@
+python-dotenv==1.0.1
+imaplib2==3.6
+google-auth-oauthlib==1.2.0
+SQLAlchemy==2.0.27
+schedule==1.2.1
+email-validator==2.1.0.post1
+beautifulsoup4==4.12.3
+python-dateutil==2.8.2
+loguru==0.7.2
+pydantic==2.6.1
+requests==2.31.0 
