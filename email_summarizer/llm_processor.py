@@ -12,9 +12,8 @@ class LLMProcessor:
         self.api_base_url = os.getenv('LLM_API_BASE_URL', 'http://localhost:8080/v1')
         self.api_key = os.getenv('LLM_API_KEY')
         self.model = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
-        
-        if not self.api_key:
-            raise ValueError("LLM_API_KEY environment variable is required")
+        # if not self.api_key:
+        #     raise ValueError("LLM_API_KEY environment variable is required")
         
         self.headers = {
             "Content-Type": "application/json",
@@ -22,42 +21,31 @@ class LLMProcessor:
         }
         
         self.transaction_system_prompt = """You are a transaction detection and analysis system. 
-        Your task is to analyze email content and extract transaction information accurately.
+        Your task is to analyze email content and extract transaction information accurately.Consider the context, language, and typical patterns of transaction emails
         You should respond in JSON format only."""
+
+        self.extraction_system_prompt = """You are a helpful assistant that extracts transaction information from bank emails.
+Given an email, extract the following in JSON format:
+  {
+    "amount": (float),
+    "type": "(credit or debit)",
+    "vendor": " (merchant or where amount is spent)",
+    "date": "2024-08-15",
+    "ref": "(transaction id or ref number)",
+    "category": "Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other"
+  }"""
         
-        self.transaction_prompt_template = """Analyze the following email content and determine if it contains transaction information.
-        If it does, extract the relevant details in JSON format. If not, return {"is_transaction": false}.
+        self.transaction_prompt_template = """Content: {content}"""
 
-        Email Subject: {subject}
-        Email Content: {content}
-
-        Required JSON format for transactions:
-        {
-            "is_transaction": true,
-            "vendor": "string",
-            "amount": float,
-            "currency": "string",
-            "description": "string",
-            "category": "string",
-            "transaction_date": "YYYY-MM-DD"
-        }
-
-        Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other
-
-        Respond with valid JSON only."""
-
-        self.detection_prompt_template = """Analyze this email and determine if it's likely to contain transaction information.
-        Consider the context, language, and typical patterns of transaction emails.
-        
+        self.detection_prompt_template = """
         Email Subject: {subject}
         Email Sender: {sender}
-        
         Respond with valid JSON only in this format:
-        {
-            "is_potential_transaction": boolean,
-            "confidence": float,  # between 0 and 1
-            "reasoning": "string"
-        }"""
+        {{
+            "is_transaction": true/false,
+            "confidence": 0.0-1.0,
+            "reasoning": "very short Explanation of why this is (or is not) a transaction."
+        }}/no_think"""
 
     def _call_llm_api(self, messages: list) -> Dict:
         """Make a call to the LLM API."""
@@ -95,6 +83,7 @@ class LLMProcessor:
                 return {"is_transaction": False}
             
             content = response['choices'][0]['message']['content']
+            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
             data = json.loads(content)
             
             # Validate required fields for transactions
@@ -130,7 +119,7 @@ class LLMProcessor:
             cleaned_subject = self._clean_text(subject)
             
             messages = [
-                {"role": "system", "content": self.transaction_system_prompt},
+                {"role": "system", "content": self.extraction_system_prompt},
                 {"role": "user", "content": self.transaction_prompt_template.format(
                     subject=cleaned_subject,
                     content=cleaned_content
@@ -147,6 +136,7 @@ class LLMProcessor:
     def is_potential_transaction(self, subject: str, sender: str) -> bool:
         """Use LLM to determine if an email is potentially a transaction."""
         try:
+            logger.info('calling llm bro')
             messages = [
                 {"role": "system", "content": self.transaction_system_prompt},
                 {"role": "user", "content": self.detection_prompt_template.format(
@@ -154,12 +144,10 @@ class LLMProcessor:
                     sender=sender
                 )}
             ]
-            
             response = self._call_llm_api(messages)
             result = self._extract_json_from_response(response)
             
-            # Consider it a potential transaction if confidence is > 0.6
-            return result.get('is_potential_transaction', False) and result.get('confidence', 0) > 0.6
+            return result.get('is_potential_transaction', False)
             
         except Exception as e:
             logger.error(f"Error in transaction detection: {str(e)}")

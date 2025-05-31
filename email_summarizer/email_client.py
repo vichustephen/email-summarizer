@@ -16,7 +16,7 @@ class EmailClient:
         self.imap_server = os.getenv('IMAP_SERVER', 'imap.gmail.com')
         self.imap_port = int(os.getenv('IMAP_PORT', 993))
         self.email_address = os.getenv('EMAIL_ADDRESS')
-        self.use_oauth = True
+        self.use_oauth = os.getenv('OAUTH_ENABLED', False) == 'True'
         self.connection = None
         self.token_path = 'token.pickle'
         self.scopes = ['https://mail.google.com/']
@@ -52,7 +52,9 @@ class EmailClient:
         """Connect to the IMAP server using OAuth2."""
         try:
             self.connection = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
+            logger.info('Trying email connection:')
             if self.use_oauth:
+                logger.info('using oauth:')
                 creds = self._get_oauth_credentials()
                 auth_string = f'user={self.email_address}\1auth=Bearer {creds.token}\1\1'
                 self.connection.authenticate('XOAUTH2', lambda x: auth_string)
@@ -90,14 +92,17 @@ class EmailClient:
             subject_parts.append(str(content))
         return ''.join(subject_parts)
 
-    def get_emails(self, batch_size: int = 10, days_back: int = 1) -> List[Dict]:
+    def get_emails(self, batch_size: int = 10, days_back: int = 0) -> List[Dict]:
         """Fetch recent emails (both read and unread) from the last N days."""
         if not self.connection:
             self.connect()
 
         try:
-            self.connection.select('INBOX')
-            
+            # Select the inbox mailbox. This is where emails are typically received.
+            status, data = self.connection.select('INBOX')
+            if status != 'OK':
+                raise imaplib.IMAP4.error(f"Failed to select INBOX: {data}")
+
             # Calculate the date range
             date = (datetime.now() - timedelta(days=days_back)).strftime("%d-%b-%Y")
             search_criterion = f'(SINCE "{date}")'
@@ -129,14 +134,31 @@ class EmailClient:
                 else:
                     body = email_message.get_payload(decode=True).decode()
                 
-                email_list.append({
+                email_data = {
                     'id': email_message['message-id'],
                     'subject': subject,
                     'sender': sender,
-                    'date': date,
+                    'date': date.isoformat(),  # Convert datetime object to ISO 8601 string for JSON serialization
                     'body': body
-                })
-            
+                }
+                email_list.append(email_data)
+
+                # Write the email data to a file
+                # Note: 'import json' should ideally be at the top of the file with other imports.
+                import json
+
+                # Define the output file name. Using .jsonl for JSON Lines format is good for appending.
+                output_filename = 'fetched_emails_log.jsonl'
+                try:
+                    with open(output_filename, 'a', encoding='utf-8') as f:
+                        json.dump(email_data, f, ensure_ascii=False) # ensure_ascii=False allows non-ASCII characters directly
+                        f.write('\n') # Add a newline to separate JSON objects (JSON Lines format)
+                    logger.debug(f"Successfully logged email '{subject}' to {output_filename}")
+                except IOError as e:
+                    logger.error(f"Failed to write email data to {output_filename}: {e}")
+                except Exception as e:
+                    logger.error(f"An unexpected error occurred while writing email data: {e}")
+            #print(email_list)
             return email_list
         except Exception as e:
             logger.error(f"Error fetching emails: {str(e)}")

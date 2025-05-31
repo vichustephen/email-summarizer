@@ -27,7 +27,7 @@ A Python-based email summarizer agent designed for Raspberry Pi that automatical
 
 ## Prerequisites
 
-- Raspberry Pi (3 or newer recommended)
+- Raspberry Pi (4 or newer recommended)
 - Python 3.8 or newer
 - A compatible GGUF model file (e.g., Phi-3 Mini or Llama 3 8B)
 - Gmail account with OAuth 2.0 credentials

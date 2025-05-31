@@ -4,6 +4,7 @@ import schedule
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from loguru import logger
+from database import Transaction
 import sys
 
 from email_client import EmailClient
@@ -37,7 +38,7 @@ def process_emails():
         
         # Get recent emails
         batch_size = int(os.getenv('BATCH_SIZE', 10))
-        days_back = int(os.getenv('DAYS_BACK', 1))
+        days_back = int(os.getenv('DAYS_BACK', 0))
         emails = email_client.get_emails(batch_size=batch_size, days_back=days_back)
         
         if not emails:
@@ -112,7 +113,7 @@ def send_daily_summary():
 def main():
     """Main entry point for the email summarizer agent."""
     # Load environment variables
-    load_dotenv()
+    load_dotenv(override=True)
     
     # Schedule tasks
     processing_interval = int(os.getenv('PROCESSING_INTERVAL_HOURS', 4))
