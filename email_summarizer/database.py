@@ -15,12 +15,12 @@ class Transaction(Base):
     
     id = Column(Integer, primary_key=True)
     email_id = Column(String, unique=True)
-    transaction_date = Column(Date)
+    date = Column(Date)
     vendor = Column(String)
     amount = Column(Float)
-    currency = Column(String)
+    type = Column(String)
     category = Column(String)
-    description = Column(String)
+    ref = Column(String)
     processed_at = Column(DateTime, default=datetime.utcnow)
 
 def init_db():

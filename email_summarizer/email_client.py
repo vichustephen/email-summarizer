@@ -1,6 +1,7 @@
 import imaplib
 import email
 from email.header import decode_header
+import re
 from bs4 import BeautifulSoup
 import os
 from datetime import datetime, timedelta
@@ -74,10 +75,23 @@ class EmailClient:
                 pass
             self.connection = None
 
-    def _clean_html(self, html_content: str) -> str:
-        """Clean HTML content and extract plain text."""
-        soup = BeautifulSoup(html_content, 'html.parser')
-        return soup.get_text(separator=' ', strip=True)
+    def _clean_text(self, text: str) -> str:
+        """Clean and prepare text for LLM processing."""
+        # Note: EmailClient is expected to provide relatively clean text,
+        # but this adds robustness in case of unexpected HTML.
+        # Check if the text looks like HTML and strip tags if so
+        if '<' in text and '>' in text: # Simple heuristic to check for potential HTML
+            try:
+                soup = BeautifulSoup(text, 'html.parser')
+                text = soup.get_text(separator=' ', strip=True)
+            except Exception as e:
+                logger.warning(f"Failed to parse HTML in _clean_text: {e}")
+        # Remove multiple whitespaces and newlines
+        text = re.sub(r'\s+', ' ', text)
+        # Remove email signatures and footers (common patterns)
+        text = re.sub(r'Best regards,.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+        text = re.sub(r'Sent from.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+        return text.strip()
 
     def _decode_email_subject(self, subject: str) -> str:
         """Decode email subject with proper character encoding."""
@@ -121,7 +135,18 @@ class EmailClient:
                 sender = email.utils.parseaddr(email_message['from'])[1]
                 date_str = email_message['date']
                 date = email.utils.parsedate_to_datetime(date_str)
-                
+                logger.info('Email:',email_message['X-Google-Class'])
+                # Filter out social email senders
+                social_senders = ["facebookmail.com", "linkedin.com", "redditmail.com", "instagram.com", "twitter.com",
+                                  "store-news@amazon.in"]  # Add more as needed
+                if any(social_sender in sender for social_sender in social_senders):
+                    logger.info(f"Skipping email from social sender: {sender}")
+                    continue
+
+                # Skip Google Social Classifications, if present
+                if 'X-Google-Class' in email_message and 'social' in email_message['X-Google-Class']:
+                    logger.info(f"Skipping email with X-Google-Class: social, Subject: {subject}")
+                    continue
                 body = ""
                 if email_message.is_multipart():
                     for part in email_message.walk():
@@ -129,7 +154,7 @@ class EmailClient:
                             body = part.get_payload(decode=True).decode()
                             break
                         elif part.get_content_type() == "text/html":
-                            body = self._clean_html(part.get_payload(decode=True).decode())
+                            body = self._clean_text(part.get_payload(decode=True).decode())
                             break
                 else:
                     body = email_message.get_payload(decode=True).decode()

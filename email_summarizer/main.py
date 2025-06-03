@@ -37,7 +37,7 @@ def process_emails():
         session = get_session()
         
         # Get recent emails
-        batch_size = int(os.getenv('BATCH_SIZE', 10))
+        batch_size = int(os.getenv('BATCH_SIZE', 20))
         days_back = int(os.getenv('DAYS_BACK', 0))
         emails = email_client.get_emails(batch_size=batch_size, days_back=days_back)
         
@@ -68,14 +68,14 @@ def process_emails():
                     add_transaction(
                         session,
                         email_id=email['id'],
-                        transaction_date=datetime.strptime(result['transaction_date'], '%Y-%m-%d').date(),
+                        date=datetime.strptime(result['date'], '%Y-%m-%d').date(),
                         vendor=result['vendor'],
                         amount=result['amount'],
-                        currency=result['currency'],
+                        type=result['type'],
                         category=result['category'],
-                        description=result['description']
+                        ref=result['ref']
                     )
-                    logger.info(f"Added transaction: {result['vendor']} - {result['amount']} {result['currency']}")
+                    logger.info(f"Added transaction: {result['vendor']} - {result['amount']} {result['type']}")
                 
             except Exception as e:
                 logger.error(f"Error processing email {email['id']}: {str(e)}")
