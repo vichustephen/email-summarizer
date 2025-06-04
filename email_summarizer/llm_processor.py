@@ -2,7 +2,7 @@ import json
 import os
 from typing import Dict, List, Optional
 from loguru import logger
-from datetime import datetime
+from datetime import datetime # This import is not used in this file after the change, consider removing if not used elsewhere.
 import re
 import requests
 from requests.exceptions import RequestException
@@ -23,7 +23,7 @@ class LLMProcessor:
         }
         
         self.transaction_system_prompt = """Analyse whether the given input indicate a financial transaction 
-        relevant to user spending?(e.g., payment, transfer, deposit, withdrawal)? (Yes/No). /no_think"""
+        relevant to user spending?(e.g., payment, transfer, deposit, withdrawal)?. /no_think"""
 
         self.extraction_system_prompt = """You are a helpful assistant that extracts transaction information from bank emails.
 Given an email, extract the following in JSON format:
@@ -34,7 +34,7 @@ Given an email, extract the following in JSON format:
     "date": "2024-08-15",
     "ref": "(transaction id or ref number)",
     "category": "Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other"
-  } /no_think"""
+  } If not found set amount to 0 /no_think"""
         
         self.transaction_prompt_template = """Content: {content}"""
 
@@ -85,39 +85,30 @@ Given an email, extract the following in JSON format:
             raise
 
 
-    def _extract_json_from_response(self, response: Dict, required_fields:List[str]) -> Dict:
+    def _extract_json_from_response(self, response: Dict, model_class: type) -> Optional[Dict]:
         """Extract and validate JSON from LLM response."""
         try:
             if not response.get('choices'):
-                return {"is_transaction": False}
+                logger.warning("No 'choices' in LLM response.")
+                return None
             
             content = response['choices'][0]['message']['content']
+            # Remove any <think>...</think> blocks if present
             content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-            data = json.loads(content)
-            
-            # Validate required fields for transactions
-            if data.get("is_transaction"):
-                if not all(field in data for field in required_fields):
-                    logger.warning("Missing required fields in transaction data")
-                    return {"is_transaction": False}
-                
-                # Validate date format
-                try:
-                    datetime.strptime(data["transaction_date"], "%Y-%m-%d")
-                except ValueError:
-                    logger.warning("Invalid date format in transaction data")
-                    return {"is_transaction": False}
-            
-            return data
+
+            validated_data = model_class.model_validate_json(content)
+            return validated_data.model_dump()
+
         except json.JSONDecodeError:
             logger.error("Failed to parse JSON from LLM response")
-            return {"is_transaction": False}
+            return None
         except Exception as e:
-            logger.error(f"Error processing LLM response: {str(e)}")
-            return {"is_transaction": False}
+            logger.error(f"Error processing LLM response or validating data: {str(e)}")
+            return None
 
     def process_email(self, subject: str, content: str) -> Dict:
         """Process email content and extract transaction information."""
+        default_response = {"amount": 0.0}
         try:
             # Clean the input text
             #cleaned_content = self._clean_text(content)
@@ -132,14 +123,13 @@ Given an email, extract the following in JSON format:
             ]
             
             response = self._call_llm_api(messages, FinancialTransaction.model_json_schema())
-            return self._extract_json_from_response(response,[
-                    "vendor", "amount", "type", "ref",
-                    "category", "date" 
-                ])
+            extracted_data = self._extract_json_from_response(response, FinancialTransaction)
+            
+            return extracted_data if extracted_data else default_response
             
         except Exception as e:
             logger.error(f"Error processing email with LLM: {str(e)}")
-            return {"is_transaction": False}
+            return default_response
 
     def is_potential_transaction(self, subject: str, sender: str) -> bool:
         """Use LLM to determine if an email is potentially a transaction."""
@@ -154,9 +144,12 @@ Given an email, extract the following in JSON format:
                 )}
             ]
             response = self._call_llm_api(messages, TransactionCheck.model_json_schema())
-            result = self._extract_json_from_response(response,['is_transaction','confidence'])
+            result = self._extract_json_from_response(response, TransactionCheck)
             
-            return result.get('is_potential_transaction', False)
+            if result:
+                # Assuming TransactionCheck model has 'is_transaction' field
+                return result.get('is_transaction', False) 
+            return False # Default to False if extraction or validation fails
             
         except Exception as e:
             logger.error(f"Error in transaction detection: {str(e)}")

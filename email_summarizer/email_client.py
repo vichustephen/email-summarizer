@@ -138,7 +138,7 @@ class EmailClient:
                 logger.info('Email:',email_message['X-Google-Class'])
                 # Filter out social email senders
                 social_senders = ["facebookmail.com", "linkedin.com", "redditmail.com", "instagram.com", "twitter.com",
-                                  "store-news@amazon.in"]  # Add more as needed
+                                  "store-news@amazon.in", "marketing"]
                 if any(social_sender in sender for social_sender in social_senders):
                     logger.info(f"Skipping email from social sender: {sender}")
                     continue

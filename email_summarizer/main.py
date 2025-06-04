@@ -47,23 +47,24 @@ def process_emails():
         
         logger.info(f"Processing {len(emails)} emails")
         
-        # Process each email
         for email in emails:
             try:
-                # Check if email was already processed
+                # Hmm.... check if email was already processed
                 if session.query(Transaction).filter_by(email_id=email['id']).first():
                     logger.debug(f"Skipping already processed email: {email['subject']}")
                     continue
                 
-                # Pre-filter emails using LLM
-                if not llm_processor.is_potential_transaction(email['subject'], email['sender']):
+                # Pre-filter emails using LLM, but don't filter out emails with 'bank' in sender or subject
+                if 'bank' not in email['subject'].lower() and 'bank' not in email['sender'].lower():
+                # Uncomment this line if we want a LLM to verify using the subject
+                # if not llm_processor.is_potential_transaction(email['subject'], email['sender']):
                     logger.debug(f"Skipping non-transaction email: {email['subject']}")
                     continue
                 
                 # Process with LLM
                 result = llm_processor.process_email(email['subject'], email['body'])
                 
-                if result['is_transaction']:
+                if result['amount'] > 0:
                     # Add to database
                     add_transaction(
                         session,
