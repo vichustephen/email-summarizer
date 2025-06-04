@@ -2,7 +2,6 @@ import json
 import os
 from typing import Dict, List, Optional
 from loguru import logger
-from datetime import datetime # This import is not used in this file after the change, consider removing if not used elsewhere.
 import re
 import requests
 from requests.exceptions import RequestException
@@ -22,22 +21,9 @@ class LLMProcessor:
             "Authorization": f"Bearer {self.api_key}"
         }
         
+        # Prompts for transaction detection (is_potential_transaction)
         self.transaction_system_prompt = """Analyse whether the given input indicate a financial transaction 
         relevant to user spending?(e.g., payment, transfer, deposit, withdrawal)?. /no_think"""
-
-        self.extraction_system_prompt = """You are a helpful assistant that extracts transaction information from bank emails.
-Given an email, extract the following in JSON format:
-  {
-    "amount": (float),
-    "type": "(credit or debit)",
-    "vendor": " (merchant or where amount is spent)",
-    "date": "2024-08-15",
-    "ref": "(transaction id or ref number)",
-    "category": "Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other"
-  } If not found set amount to 0 /no_think"""
-        
-        self.transaction_prompt_template = """Content: {content}"""
-
         self.detection_prompt_template = """
         Email Subject: {subject}
         Email Sender: {sender}
@@ -45,6 +31,21 @@ Given an email, extract the following in JSON format:
             "is_transaction": true/false,
             "confidence": 0.0-1.0,
         }}"""
+
+        self.summarization_system_prompt = """Remove unnecessary text  and summarize in less than 100 words /no_think"""
+
+        # Prompts for extraction
+        self.extraction_system_prompt = """You are a helpful assistant that extracts transaction information from bank emails.
+Given an email, extract the following in JSON format:
+        {
+            "amount": (float),
+            "type": "(credit or debit)",
+            "vendor": " (merchant or where amount is spent)",
+            "date": "2024-08-15",
+            "ref": "(transaction id or ref number)",
+            "category": "Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other"
+        } If not found set amount to 0 /no_think"""
+        self.extraction_input_template = """Content: {content}"""
 
     def _call_llm_api(self, messages: list, format: Optional[Dict] = None) -> Dict:
         """Make a call to the LLM API."""
@@ -106,20 +107,54 @@ Given an email, extract the following in JSON format:
             logger.error(f"Error processing LLM response or validating data: {str(e)}")
             return None
 
+    def summarize_email_content(self, email_body: str) -> str:
+        """Summarize email content using LLM. Returns summary text or empty string on failure."""
+        try:
+            messages = [
+                {"role": "system", "content": self.summarization_system_prompt},
+                {"role": "user", "content": email_body}
+            ]
+            
+            # Call LLM without specific JSON format for response, expecting text
+            response_data = self._call_llm_api(messages) 
+            
+            if response_data and response_data.get('choices') and \
+               len(response_data['choices']) > 0 and \
+               response_data['choices'][0].get('message') and \
+               response_data['choices'][0]['message'].get('content'):
+                
+                summary = response_data['choices'][0]['message']['content']
+                summary = re.sub(r'<think>.*?</think>', '', summary, flags=re.DOTALL).strip()
+                logger.debug(f"Successfully summarized content. Summary length: {len(summary)}")
+                return summary
+            else:
+                logger.warning("LLM response for summarization was empty or malformed.")
+                return ""
+        except Exception as e:
+            logger.error(f"Error during email summarization: {str(e)}")
+            return "" # Return empty string on failure
+
     def process_email(self, subject: str, content: str) -> Dict:
-        """Process email content and extract transaction information."""
+        """Summarize email content, then extract transaction information."""
         default_response = {"amount": 0.0}
         try:
-            # Clean the input text
-            #cleaned_content = self._clean_text(content)
-            #cleaned_subject = self._clean_text(subject)
+            logger.info("Summarizing email content...")
+            summary = self.summarize_email_content(content)
             
+            effective_body_content: str
+            if summary and summary.strip(): # Check if summary is not None and not just whitespace
+                logger.info("Using summarized content for extraction.")
+                effective_body_content = summary
+            else:
+                logger.warning("Summarization failed or returned empty. Using full original content for extraction.")
+                effective_body_content = content
+            
+            input_for_extraction = self.extraction_input_template.format(
+                content=effective_body_content
+            )
             messages = [
                 {"role": "system", "content": self.extraction_system_prompt},
-                {"role": "user", "content": self.transaction_prompt_template.format(
-                    subject=subject,
-                    content=content
-                )}
+                {"role": "user", "content": input_for_extraction}
             ]
             
             response = self._call_llm_api(messages, FinancialTransaction.model_json_schema())
