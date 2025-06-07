@@ -5,6 +5,13 @@ import os
 from typing import Dict, List
 from datetime import datetime
 from loguru import logger
+try:
+    # When imported as a module
+    from . import database
+except ImportError as e:
+    # When run as a script
+    print('error on import',str(e))
+    import database
 
 class EmailNotifier:
     def __init__(self):
@@ -13,6 +20,7 @@ class EmailNotifier:
         self.email_address = os.getenv('EMAIL_ADDRESS')
         self.notification_email = os.getenv('NOTIFICATION_EMAIL')
         self.password = os.getenv('EMAIL_PASSWORD')
+        self.db_session = database.get_session()
 
     def _format_currency(self, amount: float, currency: str) -> str:
         """Format currency amount with proper symbol."""
@@ -24,6 +32,32 @@ class EmailNotifier:
         }
         symbol = currency_symbols.get(currency, currency)
         return f"{symbol}{amount:,.2f}"
+
+    def _generate_summary_text(self, transactions: List[Dict], total_amount: Dict[str, float]) -> str:
+        """Generate plain text summary for storage."""
+        summary = []
+        
+        # Add total amount
+        summary.append("Total Spending:")
+        for currency, amount in total_amount.items():
+            summary.append(f"{self._format_currency(amount, currency)} {currency}")
+        
+        # Group by category
+        categories: Dict[str, List[Dict]] = {}
+        for transaction in transactions:
+            category = transaction['category']
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(transaction)
+        
+        # Add category summaries
+        for category, cat_transactions in categories.items():
+            summary.append(f"\n{category}:")
+            for trans in cat_transactions:
+                amount = self._format_currency(trans['amount'], trans['currency'])
+                summary.append(f"- {trans['vendor']}: {amount} {trans['currency']}")
+        
+        return "\n".join(summary)
 
     def _generate_summary_html(self, transactions: List[Dict], date: datetime) -> str:
         """Generate HTML content for the daily summary email."""
@@ -42,6 +76,18 @@ class EmailNotifier:
             if currency not in total_amount:
                 total_amount[currency] = 0
             total_amount[currency] += transaction['amount']
+
+        # Store daily summary in database
+        summary_text = self._generate_summary_text(transactions, total_amount)
+        total_sum = sum(amount for amount in total_amount.values())
+        
+        database.add_daily_summary(
+            self.db_session,
+            date=date.date(),
+            total_amount=total_sum,
+            transaction_count=len(transactions),
+            summary_text=summary_text
+        )
 
         # Generate HTML content
         html = f"""

@@ -1,10 +1,11 @@
 import imaplib
 import email
 from email.header import decode_header
+import json
 import re
 from bs4 import BeautifulSoup
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -187,6 +188,96 @@ class EmailClient:
             return email_list
         except Exception as e:
             logger.error(f"Error fetching emails: {str(e)}")
+            raise
+        finally:
+            self.disconnect() 
+
+    def get_emails_for_date(self, target_date: date) -> List[Dict]:
+        """
+        Fetch emails for a specific date.
+        
+        Args:
+            target_date (date): The date to fetch emails for
+            
+        Returns:
+            List[Dict]: List of email dictionaries with keys: id, subject, sender, date, body
+        """
+        if not self.connection:
+            self.connect()
+
+        try:
+            # Select the inbox mailbox
+            status, data = self.connection.select('INBOX')
+            if status != 'OK':
+                raise imaplib.IMAP4.error(f"Failed to select INBOX: {data}")
+
+            # Format the date for IMAP search
+            search_date = target_date.strftime("%d-%b-%Y")
+            # Search for emails on the specific date
+            search_criterion = f'(ON "{search_date}")'
+            
+            _, message_numbers = self.connection.search(None, search_criterion)
+            email_list = []
+            
+            # Process emails in reverse order (newest first)
+            message_nums = message_numbers[0].split()[::-1]
+            for num in message_nums:
+                _, msg_data = self.connection.fetch(num, '(RFC822)')
+                email_body = msg_data[0][1]
+                email_message = email.message_from_bytes(email_body)
+                
+                subject = self._decode_email_subject(email_message['subject'] or '')
+                sender = email.utils.parseaddr(email_message['from'])[1]
+                date_str = email_message['date']
+                email_date = email.utils.parsedate_to_datetime(date_str)
+
+                # Skip social emails and marketing
+                social_senders = ["facebookmail.com", "linkedin.com", "redditmail.com", "instagram.com", "twitter.com",
+                                "store-news@amazon.in", "marketing"]
+                if any(social_sender in sender for social_sender in social_senders):
+                    logger.info(f"Skipping email from social sender: {sender}")
+                    continue
+
+                # Skip Google Social Classifications
+                if 'X-Google-Class' in email_message and 'social' in email_message['X-Google-Class']:
+                    logger.info(f"Skipping email with X-Google-Class: social, Subject: {subject}")
+                    continue
+
+                # Extract body
+                body = ""
+                if email_message.is_multipart():
+                    for part in email_message.walk():
+                        if part.get_content_type() == "text/plain":
+                            body = part.get_payload(decode=True).decode()
+                            break
+                        elif part.get_content_type() == "text/html":
+                            body = self._clean_text(part.get_payload(decode=True).decode())
+                            break
+                else:
+                    body = email_message.get_payload(decode=True).decode()
+                
+                email_data = {
+                    'id': email_message['message-id'],
+                    'subject': subject,
+                    'sender': sender,
+                    'date': email_date.isoformat(),
+                    'body': body
+                }
+                email_list.append(email_data)
+
+                # Log the email data
+                output_filename = 'fetched_emails_log.jsonl'
+                try:
+                    with open(output_filename, 'a', encoding='utf-8') as f:
+                        json.dump(email_data, f, ensure_ascii=False)
+                        f.write('\n')
+                    logger.debug(f"Successfully logged email '{subject}' to {output_filename}")
+                except Exception as e:
+                    logger.error(f"Error writing email data to log: {str(e)}")
+
+            return email_list
+        except Exception as e:
+            logger.error(f"Error fetching emails for date {target_date}: {str(e)}")
             raise
         finally:
             self.disconnect() 

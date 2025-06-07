@@ -5,8 +5,15 @@ from loguru import logger
 import re
 import requests
 from requests.exceptions import RequestException
-from models.transaction import FinancialTransaction
-from models.transactionCheck import TransactionCheck
+# from models.transaction import FinancialTransaction
+# from models.transactionCheck import TransactionCheck
+try:
+    from .models.transaction import FinancialTransaction
+    from .models.transactionCheck import TransactionCheck
+
+except ImportError:
+    from models.transaction import FinancialTransaction
+    from models.transactionCheck import TransactionCheck
 
 class LLMProcessor:
     def __init__(self):
@@ -32,11 +39,11 @@ class LLMProcessor:
             "confidence": 0.0-1.0,
         }}"""
 
-        self.summarization_system_prompt = """Remove unnecessary text  and summarize in less than 100 words /no_think"""
+        self.summarization_system_prompt = """Remove unnecessary text and summarize in less than 100 words. /no_think"""
 
         # Prompts for extraction
         self.extraction_system_prompt = """You are a helpful assistant that extracts transaction information from bank emails.
-Given an email, extract the following in JSON format:
+Given an email, extract the following:
         {
             "amount": (float),
             "type": "(credit or debit)",
@@ -44,7 +51,7 @@ Given an email, extract the following in JSON format:
             "date": "2024-08-15",
             "ref": "(transaction id or ref number)",
             "category": "Categories should be one of: Food & Drink, Shopping, Bills, Travel, Entertainment, Other"
-        } If not found set amount to 0 /no_think"""
+        } If not found or failed or unsuccessful set amount to 0 /no_think"""
         self.extraction_input_template = """Content: {content}"""
 
     def _call_llm_api(self, messages: list, format: Optional[Dict] = None) -> Dict:
@@ -190,3 +197,39 @@ Given an email, extract the following in JSON format:
             logger.error(f"Error in transaction detection: {str(e)}")
             # In case of error, be conservative and return True to not miss potential transactions
             return True 
+ 
+    def process_emails(self, emails: List[Dict]) -> List[Dict]:
+        """
+        Process a list of emails and extract transactions from them.
+        
+        Args:
+            emails (List[Dict]): List of email dictionaries with keys: id, subject, sender, date, body
+            
+        Returns:
+            List[Dict]: List of extracted transactions
+        """
+        transactions = []
+        
+        for email in emails:
+            try:
+                # Pre-filter emails using LLM, but don't filter out emails with 'bank' in sender or subject
+                if 'bank' not in email['subject'].lower() and 'bank' not in email['sender'].lower():
+                    # Uncomment this line if we want a LLM to verify using the subject
+                    # if not self.is_potential_transaction(email['subject'], email['sender']):
+                    logger.debug(f"Skipping non-transaction email: {email['subject']}")
+                    continue
+                
+                # Process with LLM
+                result = self.process_email(email['subject'], email['body'])
+                
+                if result['amount'] > 0:
+                    # Add email_id to the transaction data
+                    result['email_id'] = email['id']
+                    transactions.append(result)
+                    logger.info(f"Extracted transaction: {result['vendor']} - {result['amount']} {result['type']}")
+                
+            except Exception as e:
+                logger.error(f"Error processing email {email['id']}: {str(e)}")
+                continue
+        
+        return transactions 

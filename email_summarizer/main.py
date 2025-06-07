@@ -1,17 +1,34 @@
 import os
 import time
 import schedule
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 from loguru import logger
-from database import Transaction
 import sys
+from typing import Optional
+import threading
 
-from email_client import EmailClient
-from llm_processor import LLMProcessor
-from database import get_session, add_transaction, get_daily_transactions
-from notifier import EmailNotifier
+try:
+    # When imported as a module
+    from . import database
+    from . import email_client
+    from . import llm_processor
+    from . import notifier
+    from .database import Transaction, get_session, add_transaction, get_daily_transactions
+    from .email_client import EmailClient
+    from .llm_processor import LLMProcessor
+    from .notifier import EmailNotifier
+except ImportError as e:
+    # When run as a script
+    print('errored on import',str(e))
+    from database import Transaction, get_session, add_transaction, get_daily_transactions
+    from email_client import EmailClient
+    from llm_processor import LLMProcessor
+    from notifier import EmailNotifier
 
+#pipeline-> is transaction -> is not otp or something -> is positive transaction , try spacy for credited /
+#try positive classification using BERT -> unlikely
+#After LLM extracts find properly credited or debited -> try pattern matching
 # Configure logging
 logger.remove()
 logger.add(
@@ -25,6 +42,163 @@ logger.add(
     retention="7 days",
     level=os.getenv("LOG_LEVEL", "INFO")
 )
+
+# Global state
+running = False
+last_run = None
+next_run = None
+stop_event = threading.Event()
+
+def process_date_range(start_date: date, end_date: date):
+    """Process emails and generate summaries for a date range."""
+    logger.info(f"Processing date range: {start_date} to {end_date}")
+    
+    try:
+        # Get email client
+        client = EmailClient()
+        
+        # Process each day in the range
+        current_date = start_date
+        while current_date <= end_date:
+            logger.info(f"Processing date: {current_date}")
+            
+            # Get emails for the day
+            emails = client.get_emails_for_date(current_date)
+            if not emails:
+                logger.info(f"No emails found for {current_date}")
+                current_date += timedelta(days=1)
+                continue
+            
+            # Process transactions
+            processor = LLMProcessor()
+            transactions = processor.process_emails(emails)
+            
+            if not transactions:
+                logger.info(f"No transactions found for {current_date}")
+                current_date += timedelta(days=1)
+                continue
+            
+            # Calculate summary data
+            total_amount = sum(t.get('amount', 0) for t in transactions)
+            
+            # Store transactions in database
+            session = get_session()
+            for trans in transactions:
+                try:
+                    add_transaction(
+                        session,
+                        email_id=trans['email_id'],
+                        date=current_date,
+                        vendor=trans['vendor'],
+                        amount=trans['amount'],
+                        type=trans['type'],
+                        category=trans['category'],
+                        ref=trans.get('ref', '')
+                    )
+                except Exception as e:
+                    logger.error(f"Error storing transaction: {e}")
+            
+            # Generate and store daily summary
+            notifier = EmailNotifier()
+            notifier.send_daily_summary(transactions, current_date)
+            
+            current_date += timedelta(days=1)
+            
+        logger.info("Date range processing completed")
+        
+    except Exception as e:
+        logger.error(f"Error processing date range: {e}")
+        raise
+
+def process_current_day_emails():
+    """Process emails for the current day."""
+    global last_run, next_run
+    
+    try:
+        last_run = datetime.now()
+        logger.info(f"Starting email processing at {last_run}")
+        
+        # Process yesterday's emails
+        yesterday = date.today() - timedelta(days=1)
+        process_date_range(yesterday, yesterday)
+        
+        # Update next run time
+        next_run = schedule.next_run()
+        logger.info(f"Email processing completed. Next run at {next_run}")
+        
+    except Exception as e:
+        logger.error(f"Error in process_emails: {e}")
+        raise
+
+def start_summarizer():
+    """Start the email summarizer service."""
+    global running, stop_event
+    
+    if running:
+        logger.warning("Summarizer is already running")
+        return
+    
+    try:
+        running = True
+        stop_event.clear()
+        
+        # Process emails immediately
+        process_current_day_emails()
+        
+        # Run continuously until stopped
+        while not stop_event.is_set():
+            schedule.run_pending()
+            time.sleep(1)
+            
+    except Exception as e:
+        logger.error(f"Error in start_summarizer: {e}")
+        running = False
+        raise
+    finally:
+        running = False
+
+def stop_summarizer():
+    """Stop the email summarizer service."""
+    global running, stop_event
+    
+    if not running:
+        logger.warning("Summarizer is not running")
+        return
+    
+    stop_event.set()
+    running = False
+    logger.info("Summarizer stopped")
+
+def configure_schedule(interval_minutes: int = 30, start_time: Optional[str] = None, end_time: Optional[str] = None):
+    """Configure the summarizer schedule."""
+    # Clear existing schedule
+    schedule.clear()
+    
+    # Schedule the job
+    schedule.every(interval_minutes).minutes.do(process_current_day_emails)
+    
+    if start_time:
+        schedule.every().day.at(start_time).do(process_current_day_emails)
+    if end_time:
+        schedule.every().day.at(end_time).do(stop_summarizer)
+    
+    logger.info(f"Schedule configured: every {interval_minutes} minutes")
+    
+    # Update next run time
+    global next_run
+    next_run = schedule.next_run()
+
+def get_last_run_time():
+    """Get the last run time as ISO string."""
+    return last_run.isoformat() if last_run else None
+
+def get_next_run_time():
+    """Get the next scheduled run time as ISO string."""
+    return next_run.isoformat() if next_run else None
+
+def is_running():
+    """Check if the summarizer is running."""
+    return running
 
 def process_emails():
     """Main function to process emails and extract transactions."""
@@ -88,29 +262,6 @@ def process_emails():
     except Exception as e:
         logger.error(f"Error in process_emails: {str(e)}")
 
-def send_daily_summary():
-    """Generate and send daily transaction summary."""
-    try:
-        logger.info("Preparing daily summary")
-        
-        # Get yesterday's transactions
-        yesterday = datetime.now().date() - timedelta(days=1)
-        session = get_session()
-        transactions = get_daily_transactions(session, yesterday)
-        
-        if transactions:
-            # Send summary email
-            notifier = EmailNotifier()
-            notifier.send_daily_summary(transactions, yesterday)
-            logger.info("Daily summary sent successfully")
-        else:
-            logger.info("No transactions to summarize")
-        
-        session.close()
-        
-    except Exception as e:
-        logger.error(f"Error in send_daily_summary: {str(e)}")
-
 def main():
     """Main entry point for the email summarizer agent."""
     # Load environment variables
@@ -121,10 +272,10 @@ def main():
     summary_time = os.getenv('SUMMARY_TIME', '23:00')
     
     # Schedule email processing
-    schedule.every(processing_interval).hours.do(process_emails)
+    schedule.every(processing_interval).hours.do(process_current_day_emails)
     
     # Schedule daily summary
-    schedule.every().day.at(summary_time).do(send_daily_summary)
+    #TODO schedule.every().day.at(summary_time).do(send_daily_summary)
     
     logger.info("Email Summarizer Agent started")
     logger.info(f"Email processing scheduled every {processing_interval} hours")

@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  email-summarizer:
+    build: .
+    ports:
+      - "8000:8000"  # Backend API
+      - "3000:3000"  # Frontend
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+      - ./token.pickle:/app/token.pickle:ro
+      - ./frontend:/app/frontend  # Mount frontend for development
+    environment:
+      - TZ=UTC
+      - FRONTEND_PORT=3000
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3 
