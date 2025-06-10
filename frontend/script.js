@@ -1,5 +1,7 @@
 const API_URL = 'http://localhost:8000';
 let ws = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
 
 // DOM Elements
 const statusBadge = document.getElementById('status-badge');
@@ -56,24 +58,60 @@ function updateStatus(status) {
     nextRunSpan.textContent = formatDateTime(status.next_run);
 }
 
+// Initial status check
+async function checkInitialStatus() {
+    try {
+        const response = await fetch(`${API_URL}/status`);
+        if (!response.ok) throw new Error('Failed to fetch status');
+        const status = await response.json();
+        updateStatus(status);
+    } catch (error) {
+        showToast('Failed to fetch initial status', 'warning');
+    }
+}
+
 // WebSocket Connection
 function connectWebSocket() {
-    ws = new WebSocket('ws://localhost:8000/ws');
+    if (ws !== null && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+    }
+
+    ws = new WebSocket(`ws://${window.location.hostname}:8000/ws`);
+    
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+        reconnectAttempts = 0;
+        // Send a ping to get initial status
+        ws.send('ping');
+    };
     
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'status') {
-            updateStatus(data.data);
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'status') {
+                updateStatus(data.data);
+            }
+        } catch (error) {
+            console.error('Error processing WebSocket message:', error);
         }
     };
     
     ws.onclose = () => {
-        // Try to reconnect after 5 seconds
-        setTimeout(connectWebSocket, 5000);
+        console.log('WebSocket closed');
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+            setTimeout(() => {
+                connectWebSocket();
+                checkInitialStatus();
+            }, timeout);
+        } else {
+            showToast('Connection lost. Please refresh the page.', 'error');
+        }
     };
     
-    ws.onerror = () => {
-        showToast('Connection lost. Retrying...', 'warning');
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
     };
 }
 
@@ -126,5 +164,6 @@ startBtn.addEventListener('click', startSummarizer);
 stopBtn.addEventListener('click', stopSummarizer);
 setIntervalBtn.addEventListener('click', setInterval);
 
-// Initialize WebSocket connection
+// Initialize
+checkInitialStatus();
 connectWebSocket(); 

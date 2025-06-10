@@ -55,7 +55,7 @@ function displayTransactions(transactions) {
         <tr class="transaction-row">
             <td>${formatDate(transaction.date)}</td>
             <td>${transaction.vendor}</td>
-            <td>$${transaction.amount.toFixed(2)}</td>
+            <td>${transaction.amount.toFixed(2)}</td>
             <td>
                 <span class="badge bg-${transaction.type === 'credit' ? 'success' : 'danger'}">
                     ${transaction.type}

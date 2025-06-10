@@ -37,7 +37,7 @@ logger.add(
     level=os.getenv("LOG_LEVEL", "INFO")
 )
 logger.add(
-    os.getenv("LOG_FILE", "email_summarizer.log"),
+    os.getenv("LOG_FILE", "logs/email_summarizer.log"),
     rotation="1 day",
     retention="7 days",
     level=os.getenv("LOG_LEVEL", "INFO")
@@ -48,19 +48,46 @@ running = False
 last_run = None
 next_run = None
 stop_event = threading.Event()
+current_batch = {
+    'total_emails': 0,
+    'processed': 0,
+    'current_email': '',
+    'processing_message': 'Idle'
+}
+
+def update_processing_status(total=None, processed=None, current=None, message=None):
+    """Update the current processing status."""
+    global current_batch
+    if total is not None:
+        current_batch['total_emails'] = total
+    if processed is not None:
+        current_batch['processed'] = processed
+    if current is not None:
+        current_batch['current_email'] = current
+    if message is not None:
+        current_batch['processing_message'] = message
+
+def get_processing_status():
+    """Get the current processing status."""
+    return current_batch
 
 def process_date_range(start_date: date, end_date: date):
     """Process emails and generate summaries for a date range."""
     logger.info(f"Processing date range: {start_date} to {end_date}")
+    update_processing_status(message=f"Processing emails from {start_date} to {end_date}")
     
     try:
-        # Get email client
         client = EmailClient()
+        processor = LLMProcessor()
         
-        # Process each day in the range
         current_date = start_date
         while current_date <= end_date:
+            if stop_event.is_set():
+                update_processing_status(message="Processing stopped")
+                return
+                
             logger.info(f"Processing date: {current_date}")
+            update_processing_status(message=f"Fetching emails for {current_date}")
             
             # Get emails for the day
             emails = client.get_emails_for_date(current_date)
@@ -69,65 +96,42 @@ def process_date_range(start_date: date, end_date: date):
                 current_date += timedelta(days=1)
                 continue
             
-            # Process transactions
-            processor = LLMProcessor()
-            transactions = processor.process_emails(emails)
+            # Process emails with status updates
+            transactions = processor.process_emails(
+                emails,
+                status_callback=lambda **kwargs: update_processing_status(**{
+                    **kwargs,
+                    'message': kwargs.get('message', '') + f" for {current_date}"
+                })
+            )
             
-            if not transactions:
+            if transactions:
+                # Generate and store daily summary
+                notifier = EmailNotifier()
+                notifier.send_daily_summary(transactions, current_date)
+            else:
                 logger.info(f"No transactions found for {current_date}")
-                current_date += timedelta(days=1)
-                continue
-            
-            # Calculate summary data
-            total_amount = sum(t.get('amount', 0) for t in transactions)
-            
-            # Store transactions in database
-            session = get_session()
-            for trans in transactions:
-                try:
-                    add_transaction(
-                        session,
-                        email_id=trans['email_id'],
-                        date=current_date,
-                        vendor=trans['vendor'],
-                        amount=trans['amount'],
-                        type=trans['type'],
-                        category=trans['category'],
-                        ref=trans.get('ref', '')
-                    )
-                except Exception as e:
-                    logger.error(f"Error storing transaction: {e}")
-            
-            # Generate and store daily summary
-            notifier = EmailNotifier()
-            notifier.send_daily_summary(transactions, current_date)
-            
+
             current_date += timedelta(days=1)
-            
-        logger.info("Date range processing completed")
+        
+        update_processing_status(message="Processing complete")
         
     except Exception as e:
-        logger.error(f"Error processing date range: {e}")
+        logger.error(f"Error in process_date_range: {str(e)}")
+        update_processing_status(message=f"Error: {str(e)}")
         raise
 
 def process_current_day_emails():
     """Process emails for the current day."""
-    global last_run, next_run
+    global last_run
     
     try:
+        today = date.today()
+        process_date_range(today, today)
         last_run = datetime.now()
-        logger.info(f"Starting email processing at {last_run}")
-        
-        # Process yesterday's emails
-        yesterday = date.today() - timedelta(days=1)
-        process_date_range(yesterday, yesterday)
-        
-        # Update next run time
-        next_run = schedule.next_run()
-        logger.info(f"Email processing completed. Next run at {next_run}")
-        
+        logger.info("Successfully processed current day emails")
     except Exception as e:
-        logger.error(f"Error in process_emails: {e}")
+        logger.error(f"Error processing current day emails: {e}")
         raise
 
 def start_summarizer():
@@ -154,8 +158,6 @@ def start_summarizer():
         logger.error(f"Error in start_summarizer: {e}")
         running = False
         raise
-    finally:
-        running = False
 
 def stop_summarizer():
     """Stop the email summarizer service."""
@@ -204,6 +206,7 @@ def process_emails():
     """Main function to process emails and extract transactions."""
     try:
         logger.info("Starting email processing")
+        update_processing_status(message="Initializing email processing...")
         
         # Initialize components
         email_client = EmailClient()
@@ -213,16 +216,25 @@ def process_emails():
         # Get recent emails
         batch_size = int(os.getenv('BATCH_SIZE', 20))
         days_back = int(os.getenv('DAYS_BACK', 0))
+        update_processing_status(message="Fetching emails...")
         emails = email_client.get_emails(batch_size=batch_size, days_back=days_back)
         
         if not emails:
             logger.info("No emails to process")
+            update_processing_status(message="No emails to process")
             return
         
         logger.info(f"Processing {len(emails)} emails")
+        update_processing_status(total=len(emails), processed=0, message="Processing emails...")
         
-        for email in emails:
+        for i, email in enumerate(emails, 1):
             try:
+                update_processing_status(
+                    processed=i,
+                    current=email['subject'],
+                    message=f"Processing email {i} of {len(emails)}"
+                )
+                
                 # Hmm.... check if email was already processed
                 if session.query(Transaction).filter_by(email_id=email['id']).first():
                     logger.debug(f"Skipping already processed email: {email['subject']}")
@@ -258,9 +270,11 @@ def process_emails():
         
         session.close()
         logger.info("Completed email processing")
+        update_processing_status(message="Processing complete")
         
     except Exception as e:
         logger.error(f"Error in process_emails: {str(e)}")
+        update_processing_status(message=f"Error: {str(e)}")
 
 def main():
     """Main entry point for the email summarizer agent."""

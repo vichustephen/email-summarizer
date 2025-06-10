@@ -16,18 +16,19 @@ def is_bank_transaction(text):
     doc = nlp(text.lower())
 
     # Keywords commonly found in bank transaction notifications
-    transaction_keywords = ["transaction", "payment", "transfer", "debit", "credit", "amount", "paid", "received", "account", "balance"]
+    transaction_keywords = ["transaction", "payment", "transfer", "debit", "credit", "withdrawal", "deposit",
+        "amount", "paid", "received", "sent", "charged", "spent", ]
 
     # Check for the presence of keywords
     for token in doc:
-        if token.text in transaction_keywords:
+        if token.lemma_ in transaction_keywords:
             return True
 
     # Additional checks (optional, can be refined)
     # Look for patterns like currency symbols followed by numbers
-    for token in doc:
-        if token.is_currency and token.i + 1 < len(doc) and doc[token.i + 1].is_digit:
-            return True
+    # for token in doc:
+    #     if token.is_currency and token.i + 1 < len(doc) and doc[token.i + 1].is_digit:
+    #         return True
 
     return False
 
@@ -107,10 +108,10 @@ def is_positive_transaction(text: str) -> bool:
         if term in financial_keywords:
             has_financial_indicator = True
         
-        if term in processed_keywords: # Use lemmatized term
+        if token.text in processed_keywords: # Use lemmatized term
             is_confirmed_processed = True
         
-        if term in non_processed_keywords: # Use lemmatized term
+        if token.text in non_processed_keywords: # Use lemmatized term
             is_explicitly_not_processed = True
             # If a strong non-processed keyword is found, we can mark it.
             # The final decision will check this flag.
@@ -138,7 +139,7 @@ text5 = "A transfer of 200 EUR was made from your account."
 
 # Example texts for is_positive_transaction (new)
 positive_texts = [
-    "HDFC BANK Dear Customer, Rs.67.53 has been debited from your HDFC Bank RuPay Credit Card XX123 to apollopharmacyoffline@axl APOLLO PHARMACY on 03-06-25. Your UPI transaction reference number is 438453534. If you did not authorize this transaction,  © HDFC Bank",
+    "HDFC BANK Dear Customer, Rs.67.53 has been debited from your HDFC Bank RuPay Credit Card XX123 to APOLLO PHARMACY on 03-06-25. Your UPI transaction reference number is 438453534. If you did not authorize this transaction,   © HDFC Bank",
     "You received a payment of £150.00.",
     # "A transfer of 200 EUR was made from your account.",
     # "Transaction successful: INR 1000 credited to your account.",

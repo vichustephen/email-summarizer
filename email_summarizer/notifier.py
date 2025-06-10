@@ -24,14 +24,15 @@ class EmailNotifier:
 
     def _format_currency(self, amount: float, currency: str) -> str:
         """Format currency amount with proper symbol."""
-        currency_symbols = {
-            'USD': '$',
-            'EUR': '€',
-            'GBP': '£',
-            'JPY': '¥'
-        }
-        symbol = currency_symbols.get(currency, currency)
-        return f"{symbol}{amount:,.2f}"
+        # currency_symbols = {
+        #     'USD': '$',
+        #     'EUR': '€',
+        #     'GBP': '£',
+        #     'JPY': '¥'
+        # }
+        # symbol = currency_symbols.get(currency, currency)
+        # return f"{symbol}{amount:,.2f}"
+        return f"{amount:,.2f}"
 
     def _generate_summary_text(self, transactions: List[Dict], total_amount: Dict[str, float]) -> str:
         """Generate plain text summary for storage."""
@@ -40,7 +41,8 @@ class EmailNotifier:
         # Add total amount
         summary.append("Total Spending:")
         for currency, amount in total_amount.items():
-            summary.append(f"{self._format_currency(amount, currency)} {currency}")
+            #summary.append(f"{self._format_currency(amount, currency)} {currency}")
+            summary.append(f"{amount}")
         
         # Group by category
         categories: Dict[str, List[Dict]] = {}
@@ -54,8 +56,9 @@ class EmailNotifier:
         for category, cat_transactions in categories.items():
             summary.append(f"\n{category}:")
             for trans in cat_transactions:
-                amount = self._format_currency(trans['amount'], trans['currency'])
-                summary.append(f"- {trans['vendor']}: {amount} {trans['currency']}")
+                #amount = self._format_currency(trans['amount'], trans['currency'])
+                amount = trans['amount']
+                summary.append(f"- {trans['vendor']}: {amount}")
         
         return "\n".join(summary)
 
@@ -67,15 +70,17 @@ class EmailNotifier:
         
         for transaction in transactions:
             category = transaction['category']
-            currency = transaction['currency']
+            #currency = transaction['currency']
             
             if category not in categories:
                 categories[category] = []
             categories[category].append(transaction)
             
-            if currency not in total_amount:
-                total_amount[currency] = 0
-            total_amount[currency] += transaction['amount']
+            # if currency not in total_amount:
+            #     total_amount[currency] = 0
+            if 'amount' not in total_amount:
+                total_amount['amount'] = 0
+            total_amount['amount'] += transaction['amount']
 
         # Store daily summary in database
         summary_text = self._generate_summary_text(transactions, total_amount)
@@ -83,7 +88,7 @@ class EmailNotifier:
         
         database.add_daily_summary(
             self.db_session,
-            date=date.date(),
+            date=date,
             total_amount=total_sum,
             transaction_count=len(transactions),
             summary_text=summary_text
@@ -113,7 +118,8 @@ class EmailNotifier:
         # Add total amount section
         html += "<div class='total'><h3>Total Spending:</h3>"
         for currency, amount in total_amount.items():
-            html += f"<p>{self._format_currency(amount, currency)} {currency}</p>"
+            #html += f"<p>{self._format_currency(amount, currency)} {currency}</p>"
+            html += f"<p>{amount}</p>"
         html += "</div>"
 
         # Add transactions by category
@@ -124,11 +130,11 @@ class EmailNotifier:
             """
             
             for trans in cat_transactions:
-                formatted_amount = self._format_currency(trans['amount'], trans['currency'])
+                #formatted_amount = self._format_currency(trans['amount'], trans['currency'])
+                formatted_amount = trans['amount']
                 html += f"""
                     <div class="transaction">
-                        <p><strong>{trans['vendor']}</strong> - {formatted_amount} {trans['currency']}</p>
-                        <p>{trans['description']}</p>
+                        <p><strong>{trans['vendor']}</strong> - {formatted_amount}</p>
                     </div>
                 """
             

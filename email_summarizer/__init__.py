@@ -22,7 +22,9 @@ from .main import (
     get_next_run_time,
     process_date_range,
     start_summarizer,
-    stop_summarizer
+    stop_summarizer,
+    is_running,
+    get_processing_status
 )
 
 from .database import (

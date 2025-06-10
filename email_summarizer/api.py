@@ -14,7 +14,9 @@ from . import (
     get_next_run_time,
     process_date_range,
     start_summarizer,
-    stop_summarizer
+    stop_summarizer,
+    is_running as get_summarizer_status,
+    get_processing_status
 )
 
 app = FastAPI(title="Email Summarizer API")
@@ -30,8 +32,11 @@ app.add_middleware(
 
 # Global state
 summarizer_thread = None
-is_running = False
 connected_clients: List[WebSocket] = []
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 class ScheduleConfig(BaseModel):
     interval_minutes: int = 30
@@ -44,40 +49,45 @@ class DateRange(BaseModel):
 
 @app.get("/status")
 async def get_status():
+    processing_status = get_processing_status()
     return {
-        "is_running": is_running,
+        "is_running": get_summarizer_status(),
         "last_run": get_last_run_time(),
         "next_run": get_next_run_time(),
+        "current_batch": processing_status
     }
 
 @app.post("/start")
 async def start_email_summarizer(background_tasks: BackgroundTasks):
-    global summarizer_thread, is_running
+    global summarizer_thread
     
-    if is_running:
+    if get_summarizer_status():
         raise HTTPException(status_code=400, detail="Summarizer is already running")
     
-    is_running = True
     summarizer_thread = threading.Thread(
         target=start_summarizer,
         daemon=True
     )
     summarizer_thread.start()
     
+    # Broadcast status update
+    await broadcast_status_update()
     return {"status": "started"}
 
 @app.post("/stop")
 async def stop_email_summarizer():
-    global is_running, summarizer_thread
+    global summarizer_thread
     
-    if not is_running:
+    if not get_summarizer_status():
         raise HTTPException(status_code=400, detail="Summarizer is not running")
     
-    is_running = False
     stop_summarizer()
     if summarizer_thread:
         summarizer_thread.join(timeout=5)
+        summarizer_thread = None
     
+    # Broadcast status update
+    await broadcast_status_update()
     return {"status": "stopped"}
 
 @app.post("/configure")
@@ -142,38 +152,63 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             await websocket.receive_text()
-            # Keep connection alive
-            await websocket.send_json({
-                "type": "status",
-                "data": {
-                    "is_running": is_running,
-                    "last_run": get_last_run_time(),
-                    "next_run": get_next_run_time(),
-                }
-            })
+            # Send current status
+            await send_status_to_client(websocket)
     except:
-        connected_clients.remove(websocket)
+        if websocket in connected_clients:
+            connected_clients.remove(websocket)
 
-# Broadcast status updates to all connected clients
-async def broadcast_status():
-    while True:
-        if connected_clients:
-            status_data = {
-                "type": "status",
-                "data": {
-                    "is_running": is_running,
-                    "last_run": get_last_run_time(),
-                    "next_run": get_next_run_time(),
-                }
+async def send_status_to_client(websocket: WebSocket):
+    """Send current status to a specific client."""
+    try:
+        processing_status = get_processing_status()
+        await websocket.send_json({
+            "type": "status",
+            "data": {
+                "is_running": get_summarizer_status(),
+                "last_run": get_last_run_time(),
+                "next_run": get_next_run_time(),
+                "current_batch": processing_status
             }
-            for client in connected_clients:
-                try:
-                    await client.send_json(status_data)
-                except:
-                    connected_clients.remove(client)
-        await asyncio.sleep(1)
+        })
+    except:
+        if websocket in connected_clients:
+            connected_clients.remove(websocket)
+
+async def broadcast_status_update():
+    """Broadcast status update to all connected clients."""
+    processing_status = get_processing_status()
+    status_data = {
+        "type": "status",
+        "data": {
+            "is_running": get_summarizer_status(),
+            "last_run": get_last_run_time(),
+            "next_run": get_next_run_time(),
+            "current_batch": processing_status
+        }
+    }
+    for client in connected_clients[:]:
+        try:
+            await client.send_json(status_data)
+        except:
+            if client in connected_clients:
+                connected_clients.remove(client)
+
+async def status_broadcast_loop():
+    """Background task to periodically broadcast status updates."""
+    while True:
+        try:
+            await broadcast_status_update()
+        except Exception as e:
+            logger.error(f"Error in status broadcast loop: {e}")
+        await asyncio.sleep(0.5)  # Broadcast every 500ms for more responsive updates
 
 @app.on_event("startup")
 async def startup_event():
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(broadcast_status) 
+    """Initialize the application."""
+    try:
+        # Start the status broadcast loop
+        asyncio.create_task(status_broadcast_loop())
+        logger.info("Status broadcast loop started")
+    except Exception as e:
+        logger.error(f"Error starting status broadcast loop: {e}") 

@@ -5,11 +5,13 @@ from loguru import logger
 import re
 import requests
 from requests.exceptions import RequestException
+from email_summarizer.text_utils import is_bank_transaction, is_positive_transaction
 # from models.transaction import FinancialTransaction
 # from models.transactionCheck import TransactionCheck
 try:
     from .models.transaction import FinancialTransaction
     from .models.transactionCheck import TransactionCheck
+    from .database import Transaction, get_session
 
 except ImportError:
     from models.transaction import FinancialTransaction
@@ -156,6 +158,9 @@ Given an email, extract the following:
                 logger.warning("Summarization failed or returned empty. Using full original content for extraction.")
                 effective_body_content = content
             
+            if not is_positive_transaction(effective_body_content):
+                logger.info("Skipping non positive transaction email.")
+
             input_for_extraction = self.extraction_input_template.format(
                 content=effective_body_content
             )
@@ -198,26 +203,47 @@ Given an email, extract the following:
             # In case of error, be conservative and return True to not miss potential transactions
             return True 
  
-    def process_emails(self, emails: List[Dict]) -> List[Dict]:
+    def process_emails(self, emails: List[Dict], status_callback=None) -> List[Dict]:
         """
         Process a list of emails and extract transactions from them.
         
         Args:
             emails (List[Dict]): List of email dictionaries with keys: id, subject, sender, date, body
+            status_callback: Optional callback function to update processing status
             
         Returns:
             List[Dict]: List of extracted transactions
         """
         transactions = []
+        session = get_session()
         
-        for email in emails:
+        if status_callback:
+            status_callback(total=len(emails), processed=0, message="Starting email processing")
+        
+        for i, email in enumerate(emails, 1):
             try:
                 # Pre-filter emails using LLM, but don't filter out emails with 'bank' in sender or subject
-                if 'bank' not in email['subject'].lower() and 'bank' not in email['sender'].lower():
-                    # Uncomment this line if we want a LLM to verify using the subject
-                    # if not self.is_potential_transaction(email['subject'], email['sender']):
-                    logger.debug(f"Skipping non-transaction email: {email['subject']}")
+                # if 'bank' not in email['subject'].lower() and 'bank' not in email['sender'].lower():
+                #     # Uncomment this line if we want a LLM to verify using the subject
+                #     # if not self.is_potential_transaction(email['subject'], email['sender']):
+                #     logger.debug(f"Skipping non-transaction email: {email['subject']}")
+                #     continue
+
+                # Hmm.... check if email was already processed
+                if session.query(Transaction).filter_by(email_id=email['id']).first():
+                    logger.debug(f"Skipping already processed email: {email['subject']}")
                     continue
+                
+                if not is_bank_transaction(email['body']):
+                    logger.info("Skipping non transaction email.", email['sender'])
+                    continue
+                
+                if status_callback:
+                    status_callback(
+                        processed=i,
+                        current=email['subject'],
+                        message=f"Processing email {i} of {len(emails)}"
+                    )
                 
                 # Process with LLM
                 result = self.process_email(email['subject'], email['body'])
@@ -231,5 +257,8 @@ Given an email, extract the following:
             except Exception as e:
                 logger.error(f"Error processing email {email['id']}: {str(e)}")
                 continue
+        
+        if status_callback:
+            status_callback(message="Email processing complete")
         
         return transactions 

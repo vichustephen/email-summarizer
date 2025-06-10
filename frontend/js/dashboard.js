@@ -10,6 +10,11 @@ const startDateInput = document.getElementById('start-date');
 const endDateInput = document.getElementById('end-date');
 const processBtn = document.getElementById('process-btn');
 
+// Processing status elements
+const processingMessage = document.getElementById('processing-message');
+const emailCount = document.getElementById('email-count');
+const processingProgress = document.getElementById('processing-progress');
+
 // Set max date to yesterday and min date to 7 days ago
 const today = new Date();
 const yesterday = new Date(today);
@@ -41,6 +46,21 @@ function updateStatus(status) {
     // Update timestamps
     lastRunSpan.textContent = formatDateTime(status.last_run);
     nextRunSpan.textContent = formatDateTime(status.next_run);
+    
+    // Update processing status
+    if (status.current_batch) {
+        const batch = status.current_batch;
+        processingMessage.textContent = batch.processing_message;
+        emailCount.textContent = `${batch.processed}/${batch.total_emails}`;
+        
+        // Calculate progress percentage
+        const progress = batch.total_emails > 0 
+            ? Math.round((batch.processed / batch.total_emails) * 100) 
+            : 0;
+        
+        processingProgress.style.width = `${progress}%`;
+        processingProgress.setAttribute('aria-valuenow', progress);
+    }
 }
 
 // API Calls

@@ -53,7 +53,7 @@
         <div class="card mb-4">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="card-title mb-0">Status</h5>
+                    <h5 class="card-title mb-0">Email Agent Status:</h5>
                     <span id="status-badge" class="badge rounded-pill text-bg-secondary status-badge">
                         Stopped
                     </span>
@@ -66,6 +66,17 @@
                     <button id="stop-btn" class="btn btn-danger" disabled>
                         <i class="fas fa-stop me-2"></i>Stop
                     </button>
+                </div>
+
+                <!-- Processing Progress -->
+                <div class="processing-status mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span id="processing-message" class="text-muted">No active processing</span>
+                        <span id="email-count" class="badge bg-primary">0/0</span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div id="processing-progress" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
                 </div>
 
                 <div class="text-muted">
@@ -100,7 +111,7 @@
         <!-- Interval Setting Card -->
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title mb-3">Check Interval</h5>
+                <h5 class="card-title mb-3">Agent Run Interval (Set this to start the scheduler)</h5>
                 <div class="row g-3">
                     <div class="col-md-8">
                         <label class="form-label">Interval (minutes)</label>
