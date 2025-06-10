@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set max date to yesterday and min date to 7 days ago
     const today = new Date();
     const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
+    yesterday.setDate(today.getDate());
     const weekAgo = new Date(yesterday);
     weekAgo.setDate(yesterday.getDate() - 6);
 
