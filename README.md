@@ -2,7 +2,8 @@
 
 **Minimal design (Tested on  Raspberry Pi 4 2GB with Qwen3 0.6b using llama cpp) automated extraction & summarisation of transaction e-mails powered by a local LLM and a modern browser dashboard.**
 
-TESTED ON HDFC/INDISIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON ON OTHER BANK EMAILS
+TESTED ON HDFC/INDUSIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON ON OTHER BANK EMAILS
+
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal.svg) ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple.svg) ![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)
 
 ---
@@ -14,6 +15,8 @@ TESTED ON HDFC/INDISIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON 
 - Sufficient storage space for the LLM model
 
 ## 1. Quick-start
+
+Please Setup and install llamacpp or ollama or any other local LLM and **Important properly update the ENV**
 
 ### 1.1 Run with Docker (recommended)
 
