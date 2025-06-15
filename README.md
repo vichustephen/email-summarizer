@@ -27,7 +27,6 @@ $ cp .env.example .env         # edit with your secrets & paths
 $ docker run -it --rm \
     -p 8000:8000 -p 3000:3000 \
     --env-file .env \
-    -v $PWD/models:/models \
     -v $PWD/data:/app/data \
     email-summarizer
 ```
@@ -81,28 +80,78 @@ You can use any LLM that is compatible. You can also use tools like Ollama and L
 ## 4. Key Features
 
 * 📅 Automatic & manual date-range processing
-* 💾 Custom Database storage of transactions
+* 💾 Flexible database storage (SQLite, PostgreSQL, etc.)
 * 📨 Optional e-mail notifications
 * 🐳 Docker-first deployment
 
 ---
 
 ## 5. Configuration (.env)
+
+To configure the application, copy the `.env.example` file to `.env` and set the appropriate environment variables. Ensure you replace placeholder values with your actual credentials and settings.
+
 ```
 # General
 LOG_LEVEL=INFO
 LOG_FILE=/app/logs/email_summarizer.log
+
+# Database
+DATABASE_URL=sqlite:////app/data/transactions.db # Use an appropriate connection string for your database, e.g., postgresql+psycopg://user:password@host:port/dbname
 
 # E-mail
 IMAP_SERVER=imap.gmail.com
 IMAP_PORT=993
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
+EMAIL_USERNAME=your_email@gmail.com
+
+#SET TO FALSE TO DISABLE OAUTH AND USE APP PASSWORD
+OAUTH_ENABLED=False
+
+#FOR OAUTH
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+#FOR APP PASSWORD
+EMAIL_PASSWORD=your_app_password
 
 # Frontend
 FRONTEND_PORT=3000
 ```
 > Environment names match the keys consumed in `email_summarizer.main` and `email_summarizer.api`.
+
+---
+
+## Gmail Connection Methods
+
+You can connect to your Gmail account using either OAuth 2.0 or a Google App Password. Choose the method that best suits your needs.
+
+### Option 1: OAuth 2.0 Setup for Gmail
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the Gmail API
+4. Create OAuth 2.0 credentials:
+   - Create OAuth client ID
+   - Select Desktop application
+   - Download the client configuration file (usually `credentials.json`)
+5. Update the `.env` file with your client ID and secret, or ensure `credentials.json` is accessible to the application.
+
+### Option 2: Google App Password Setup for Gmail
+
+If you have 2-Step Verification enabled on your Google Account, you can use an App Password to allow the application to access your Gmail. This is often simpler for automated systems.
+
+1. Go to your [Google Account Security page](https://myaccount.google.com/security).
+2. Under "How you sign in to Google," select **App passwords**.
+   * If you don't see "App passwords," it might be because:
+     * 2-Step Verification is not set up for your account.
+     * 2-Step Verification is only set up for security keys.
+     * Your account is through work, school, or other organization.
+     * You've turned on Advanced Protection.
+3. At the bottom, choose **Select app** and choose **Mail**.
+4. Choose **Select device** and choose **Other (Custom name)**. Enter a name like "Email Summarizer" and click **GENERATE**.
+5. A 16-character code in a yellow bar will appear. This is your App Password. Copy this password.
+6. In your `.env` file, set `EMAIL_USERNAME` to your Gmail address and `EMAIL_PASSWORD` to this generated App Password.
 
 ---
 

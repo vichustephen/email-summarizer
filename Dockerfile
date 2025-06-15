@@ -44,9 +44,6 @@ ENV DATABASE_URL=sqlite:////app/data/transactions.db \
     IMAP_PORT=993 \
     SMTP_SERVER=smtp.gmail.com \
     SMTP_PORT=587 \
-    BATCH_SIZE=20 \
-    PROCESSING_INTERVAL_HOURS=4 \
-    SUMMARY_TIME=23:00 \
     FRONTEND_PORT=3000
 
 # 8000 is backend 3000 frontend ports
