@@ -1,7 +1,5 @@
-# Use Python 3.11 slim image for a smaller footprint
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
 # Set environment variables
@@ -16,11 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# you can change the spacy pipepine here
+RUN python -m spacy download en_core_web_sm 
 
 # Copy application code
 COPY email_summarizer/ email_summarizer/
@@ -33,9 +32,9 @@ RUN mkdir -p /app/data /app/logs \
     && chmod -R 755 /app/data /app/logs
 
 # Create a non-root user
-RUN useradd -m -u 1000 appuser \
-    && chown -R appuser:appuser /app
-USER appuser
+# RUN useradd -m -u 1000 appuser \
+#     && chown -R appuser:appuser /app
+# USER appuser
 
 # Set default environment variables
 ENV DATABASE_URL=sqlite:////app/data/transactions.db \
@@ -50,12 +49,10 @@ ENV DATABASE_URL=sqlite:////app/data/transactions.db \
     SUMMARY_TIME=23:00 \
     FRONTEND_PORT=3000
 
-# Expose both backend and frontend ports
+# 8000 is backend 3000 frontend ports
 EXPOSE 8000 3000
 
-# Copy the startup script
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Use the startup script as entrypoint
 ENTRYPOINT ["/app/start.sh"] 

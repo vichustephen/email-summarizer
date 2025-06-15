@@ -22,6 +22,10 @@ class EmailClient:
         self.connection = None
         self.token_path = 'token.pickle'
         self.scopes = ['https://mail.google.com/']
+        
+        # Email logging configuration
+        self.enable_logging = os.getenv('ENABLE_EMAIL_LOGGING', 'False').lower() == 'true'
+        self.log_file_path = os.getenv('EMAIL_LOG_PATH', 'fetched_emails_log.jsonl')
 
     def _get_oauth_credentials(self) -> Credentials:
         """Get or refresh OAuth2 credentials."""
@@ -107,6 +111,19 @@ class EmailClient:
             subject_parts.append(str(content))
         return ''.join(subject_parts)
 
+    def _log_email_data(self, email_data: Dict, subject: str):
+        """Helper method to log email data to file if logging is enabled."""
+        if not self.enable_logging:
+            return
+            
+        try:
+            with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                json.dump(email_data, f, ensure_ascii=False)
+                f.write('\n')
+            logger.debug(f"Successfully logged email '{subject}' to {self.log_file_path}")
+        except Exception as e:
+            logger.error(f"Error writing email data to log: {str(e)}")
+
     def get_emails(self, batch_size: int = 10, days_back: int = 0) -> List[Dict]:
         """Fetch recent emails (both read and unread) from the last N days."""
         if not self.connection:
@@ -167,23 +184,8 @@ class EmailClient:
                     'date': date.isoformat(),  # Convert datetime object to ISO 8601 string for JSON serialization
                     'body': body
                 }
-                email_list.append(email_data)
-
-                # Write the email data to a file
-                # Note: 'import json' should ideally be at the top of the file with other imports.
-                import json
-
-                # Define the output file name. Using .jsonl for JSON Lines format is good for appending.
-                output_filename = 'fetched_emails_log.jsonl'
-                try:
-                    with open(output_filename, 'a', encoding='utf-8') as f:
-                        json.dump(email_data, f, ensure_ascii=False) # ensure_ascii=False allows non-ASCII characters directly
-                        f.write('\n') # Add a newline to separate JSON objects (JSON Lines format)
-                    logger.debug(f"Successfully logged email '{subject}' to {output_filename}")
-                except IOError as e:
-                    logger.error(f"Failed to write email data to {output_filename}: {e}")
-                except Exception as e:
-                    logger.error(f"An unexpected error occurred while writing email data: {e}")
+                email_list.append(email_data)                # Log the email data if enabled
+                self._log_email_data(email_data, subject)
             #print(email_list)
             return email_list
         except Exception as e:
@@ -264,20 +266,13 @@ class EmailClient:
                     'body': body
                 }
                 email_list.append(email_data)
-
-                # Log the email data
-                output_filename = 'fetched_emails_log.jsonl'
-                try:
-                    with open(output_filename, 'a', encoding='utf-8') as f:
-                        json.dump(email_data, f, ensure_ascii=False)
-                        f.write('\n')
-                    logger.debug(f"Successfully logged email '{subject}' to {output_filename}")
-                except Exception as e:
-                    logger.error(f"Error writing email data to log: {str(e)}")
+                
+                # Log the email data if enabled
+                self._log_email_data(email_data, subject)
 
             return email_list
         except Exception as e:
             logger.error(f"Error fetching emails for date {target_date}: {str(e)}")
             raise
         finally:
-            self.disconnect() 
+            self.disconnect()

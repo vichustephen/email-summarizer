@@ -33,6 +33,9 @@ app.add_middleware(
 # Global state
 summarizer_thread = None
 connected_clients: List[WebSocket] = []
+notify_user_global = True
+
+date_range_thread = None
 
 @app.get("/health")
 async def health_check():
@@ -100,7 +103,7 @@ async def configure_run_schedule(config: ScheduleConfig):
     return {"status": "configured"}
 
 @app.post("/summarize-range")
-async def summarize_date_range(date_range: DateRange):
+async def summarize_date_range(date_range: DateRange, background_tasks: BackgroundTasks):
     today = date.today()
     min_date = today - timedelta(days=7)
     
@@ -116,8 +119,22 @@ async def summarize_date_range(date_range: DateRange):
             detail="Start date must be before end date"
         )
     
-    session = database.get_session()
-    process_date_range(date_range.start_date, date_range.end_date)
+    global date_range_thread
+
+    # Prevent overlapping range processing jobs
+    if date_range_thread and date_range_thread.is_alive():
+        raise HTTPException(status_code=400, detail="A date-range processing job is already running")
+
+    # Start processing in a background thread so the event loop remains responsive
+    date_range_thread = threading.Thread(
+        target=process_date_range,
+        args=(date_range.start_date, date_range.end_date, notify_user_global),
+        daemon=True
+    )
+    date_range_thread.start()
+
+    # Immediately broadcast initial status to clients
+    await broadcast_status_update()
     return {"status": "processing"}
 
 @app.get("/summaries")
@@ -211,4 +228,14 @@ async def startup_event():
         asyncio.create_task(status_broadcast_loop())
         logger.info("Status broadcast loop started")
     except Exception as e:
-        logger.error(f"Error starting status broadcast loop: {e}") 
+        logger.error(f"Error starting status broadcast loop: {e}")
+
+@app.get("/notification-preference")
+async def get_notification_preference():
+    return {"notify_user": notify_user_global}
+
+@app.post("/notification-preference")
+async def set_notification_preference(value: dict):
+    global notify_user_global
+    notify_user_global = bool(value.get("notify_user", True))
+    return {"notify_user": notify_user_global} 

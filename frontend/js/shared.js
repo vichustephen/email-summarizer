@@ -94,7 +94,7 @@ function validateDateRange(startDate, endDate) {
     const end = new Date(endDate);
     const today = new Date();
     const maxDate = new Date(today);
-    maxDate.setDate(today.getDate() - 1); // Yesterday is the max date
+    maxDate.setDate(today.getDate()); // Today is the max date
     const minDate = new Date(maxDate);
     minDate.setDate(maxDate.getDate() - 7); // 7 days before max date
     
@@ -114,4 +114,22 @@ function validateDateRange(startDate, endDate) {
     }
     
     return true;
-} 
+}
+
+// Button loading utility
+function toggleButtonLoading(button, isLoading = true, loadingText = 'Loading...') {
+    if (isLoading) {
+        button.disabled = true;
+        // Save current HTML if not already saved
+        if (!button.dataset.originalHtml) {
+            button.dataset.originalHtml = button.innerHTML;
+        }
+        button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${loadingText}`;
+    } else {
+        button.disabled = false;
+        if (button.dataset.originalHtml) {
+            button.innerHTML = button.dataset.originalHtml;
+            delete button.dataset.originalHtml;
+        }
+    }
+}

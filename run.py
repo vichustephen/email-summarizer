@@ -3,7 +3,7 @@ import sys
 import os
 from pathlib import Path
 import http.server
-import socketserver
+import socketserver 
 import webbrowser
 
 def run_backend():
@@ -29,7 +29,6 @@ def run_frontend():
     httpd.serve_forever()
 
 def main():
-    # Create frontend directory if it doesn't exist
     frontend_dir = Path("frontend")
     if not frontend_dir.exists():
         frontend_dir.mkdir()

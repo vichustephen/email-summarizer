@@ -63,8 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            loadBtn.disabled = true;
-            loadBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...';
+            toggleButtonLoading(loadBtn, true, 'Loading...');
 
             const response = await fetch(`${API_URL}/summaries?start_date=${startDate}&end_date=${endDate}`);
             
@@ -84,8 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Failed to load summaries. Please try again.', 'error');
             summariesContainer.innerHTML = '<div class="alert alert-danger">Error loading summaries. Please try again.</div>';
         } finally {
-            loadBtn.disabled = false;
-            loadBtn.innerHTML = '<i class="fas fa-search me-2"></i>Load Summaries';
+            toggleButtonLoading(loadBtn, false);
         }
     }
 

@@ -9,6 +9,7 @@ const nextRunSpan = document.getElementById('next-run');
 const startDateInput = document.getElementById('start-date');
 const endDateInput = document.getElementById('end-date');
 const processBtn = document.getElementById('process-btn');
+const notifyCheckbox = document.getElementById('notify-checkbox');
 
 // Processing status elements
 const processingMessage = document.getElementById('processing-message');
@@ -65,22 +66,28 @@ function updateStatus(status) {
 
 // API Calls
 async function startSummarizer() {
+    toggleButtonLoading(startBtn, true, 'Starting...');
     try {
         const response = await fetch(`${API_URL}/start`, { method: 'POST' });
         if (!response.ok) throw new Error('Failed to start summarizer');
         showToast('Summarizer started successfully');
     } catch (error) {
         showToast(error.message, 'danger');
+    } finally {
+        toggleButtonLoading(startBtn, false);
     }
 }
 
 async function stopSummarizer() {
+    toggleButtonLoading(stopBtn, true, 'Stopping...');
     try {
         const response = await fetch(`${API_URL}/stop`, { method: 'POST' });
         if (!response.ok) throw new Error('Failed to stop summarizer');
         showToast('Summarizer stopped successfully');
     } catch (error) {
         showToast(error.message, 'danger');
+    } finally {
+        toggleButtonLoading(stopBtn, false);
     }
 }
 
@@ -90,6 +97,7 @@ async function setInterval() {
         showToast('Please enter a valid interval between 5 and 1440 minutes', 'warning');
         return;
     }
+    toggleButtonLoading(setIntervalBtn, true, 'Saving...');
     
     try {
         const response = await fetch(`${API_URL}/configure`, {
@@ -104,17 +112,40 @@ async function setInterval() {
         showToast(`Interval set to ${minutes} minutes`);
     } catch (error) {
         showToast(error.message, 'danger');
+    } finally {
+        toggleButtonLoading(setIntervalBtn, false);
     }
 }
+
+// Fetch and set notification preference on load
+async function fetchNotificationPreference() {
+    try {
+        const response = await fetch(`${API_URL}/notification-preference`);
+        if (response.ok) {
+            const data = await response.json();
+            notifyCheckbox.checked = !!data.notify_user;
+        }
+    } catch (e) { /* ignore */ }
+}
+
+// Update notification preference when toggled
+notifyCheckbox.addEventListener('change', async function() {
+    try {
+        await fetch(`${API_URL}/notification-preference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notify_user: notifyCheckbox.checked })
+        });
+    } catch (e) { /* ignore */ }
+});
 
 async function processDateRange() {
     const startDate = startDateInput.value;
     const endDate = endDateInput.value;
-    
     if (!validateDateRange(startDate, endDate)) {
         return;
     }
-    
+    toggleButtonLoading(processBtn, true, 'Processing...');
     try {
         const response = await fetch(`${API_URL}/summarize-range`, {
             method: 'POST',
@@ -126,11 +157,12 @@ async function processDateRange() {
                 end_date: endDate
             }),
         });
-        
         if (!response.ok) throw new Error('Failed to process date range');
         showToast('Processing date range. Check history for results.');
     } catch (error) {
         showToast(error.message, 'danger');
+    } finally {
+        toggleButtonLoading(processBtn, false);
     }
 }
 
@@ -145,4 +177,6 @@ setupWebSocket((data) => {
     if (data.type === 'status') {
         updateStatus(data.data);
     }
-}); 
+});
+
+fetchNotificationPreference(); 

@@ -4,7 +4,7 @@ const endDateInput = document.getElementById('end-date');
 const loadBtn = document.getElementById('load-btn');
 const transactionsContainer = document.getElementById('transactions-container');
 
-// Set max date to yesterday and min date to 7 days ago
+// Set max date to todday and min date to 7 days ago
 const today = new Date();
 const yesterday = new Date(today);
 yesterday.setDate(today.getDate());

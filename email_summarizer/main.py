@@ -71,9 +71,9 @@ def get_processing_status():
     """Get the current processing status."""
     return current_batch
 
-def process_date_range(start_date: date, end_date: date):
+def process_date_range(start_date: date, end_date: date, notify_user: bool = True):
     """Process emails and generate summaries for a date range."""
-    logger.info(f"Processing date range: {start_date} to {end_date}")
+    logger.info(f"Processing date range: {start_date} to {end_date}, notify_user={notify_user}")
     update_processing_status(message=f"Processing emails from {start_date} to {end_date}")
     
     try:
@@ -105,16 +105,18 @@ def process_date_range(start_date: date, end_date: date):
                 })
             )
             
-            if transactions:
+            if transactions and notify_user:
                 # Generate and store daily summary
                 notifier = EmailNotifier()
                 notifier.send_daily_summary(transactions, current_date)
+            elif transactions:
+                logger.info(f"Transactions found for {current_date}, but notification is disabled.")
             else:
                 logger.info(f"No transactions found for {current_date}")
 
             current_date += timedelta(days=1)
         
-        update_processing_status(message="Processing complete")
+        update_processing_status(message="Processing complete",processed=current_batch['total_emails'])
         
     except Exception as e:
         logger.error(f"Error in process_date_range: {str(e)}")
@@ -124,10 +126,10 @@ def process_date_range(start_date: date, end_date: date):
 def process_current_day_emails():
     """Process emails for the current day."""
     global last_run
-    
+    from .api import notify_user_global
     try:
         today = date.today()
-        process_date_range(today, today)
+        process_date_range(today, today, notify_user=notify_user_global)
         last_run = datetime.now()
         logger.info("Successfully processed current day emails")
     except Exception as e:
