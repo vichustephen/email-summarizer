@@ -1,6 +1,8 @@
 # Transaction Email Summarizer
 
-**Designed for minimal prcessing (Tested on  Raspberry Pi 4 2GB) automated extraction & summarisation of transaction e-mails powered by a local LLM and a modern browser dashboard.**
+**Minimal design (Tested on  Raspberry Pi 4 2GB with Qwen3 0.6b using llama cpp) automated extraction & summarisation of transaction e-mails powered by a local LLM and a modern browser dashboard.**
+
+TESTED ON HDFC/INDUSIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON ON OTHER BANK EMAILS
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal.svg) ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple.svg) ![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)
 
@@ -13,6 +15,8 @@
 - Sufficient storage space for the LLM model
 
 ## 1. Quick-start
+
+Please Setup and install llamacpp or ollama or any other local LLM and **Important properly update the ENV**
 
 ### 1.1 Run with Docker (recommended)
 
@@ -76,7 +80,7 @@ You can use any LLM that is compatible. You can also use tools like Ollama and L
 * **Frontend** – Static HTML/JS served via a lightweight Python HTTP server (or any CDN).  Provides a dashboard for scheduling, manual date-range processing, live progress bar, and history browsing.
 * **Backend** – FastAPI application (`email_summarizer.api`) exposing REST & WebSocket endpoints.
 * **Scheduler** – Background thread processes the inbox periodically or on demand.
-* **Local LLM** – llama.cpp loaded via Python bindings; all processing stays on your machine.
+* **Local LLM** – llama.cpp or ollama or LMstudio
 
 ---
 
