@@ -59,7 +59,7 @@ function updateStatus(status) {
             ? Math.round((batch.processed / batch.total_emails) * 100) 
             : 0;
        
-        if (batch.processed === batch.total_emails && batch.current_email !== null && batch.current_email !== '') {
+        if (batch.processed === batch.total_emails && batch.processing_message== 'Processing complete') {
             showToast('Processing complete! Check your email or history tab.');
         }
         processingProgress.style.width = `${progress}%`;
@@ -161,7 +161,7 @@ async function processDateRange() {
             }),
         });
         if (!response.ok) throw new Error('Failed to process date range');
-        showToast('Processing date range. Check history for results.');
+        showToast('Started processing date range.');
     } catch (error) {
         showToast(error.message, 'danger');
     } finally {
