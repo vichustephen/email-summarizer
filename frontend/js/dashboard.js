@@ -58,7 +58,10 @@ function updateStatus(status) {
         const progress = batch.total_emails > 0 
             ? Math.round((batch.processed / batch.total_emails) * 100) 
             : 0;
-        
+       
+        if (batch.processed === batch.total_emails && batch.current_email !== null && batch.current_email !== '') {
+            showToast('Processing complete! Check your email or history tab.');
+        }
         processingProgress.style.width = `${progress}%`;
         processingProgress.setAttribute('aria-valuenow', progress);
     }

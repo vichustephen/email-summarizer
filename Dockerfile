@@ -7,11 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-# Install system dependencies
+# Install system and build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    git \
     libpq-dev \
     curl \
+    build-essential \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -20,6 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # you can change the spacy pipepine here
 RUN python -m spacy download en_core_web_sm 
+
+# Remove build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove build-essential cmake && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
 COPY email_summarizer/ email_summarizer/

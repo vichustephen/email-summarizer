@@ -46,6 +46,9 @@ cd frontend && python -m http.server 3000
 ```
 
 ---
+set CMAKE_GENERATOR=MinGW Makefiles
+set CMAKE_ARGS=-DGGML_OPENBLAS=on -DCMAKE_C_COMPILER=D:/ProgramFiles/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=D:/ProgramFiles/w64devkit/bin/g++.exe -DCMAKE_MAKE_PROGRAM=D:/ProgramFiles/w64devkit/bin/make.exe
+
 
 ## 2. Why you need an LLM 📚
 This project relies on a **local Large Language Model** to parse natural-language e-mails and extract the monetary transactions inside them.  

@@ -1,3 +1,4 @@
+llama-cpp-python==0.3.9
 python-dotenv==1.0.1
 imaplib2==3.6
 google-auth-oauthlib==1.2.0

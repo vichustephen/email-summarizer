@@ -10,13 +10,10 @@ import threading
 
 try:
     # When imported as a module
-    from . import database
-    from . import email_client
-    from . import llm_processor
-    from . import notifier
     from .database import Transaction, get_session, add_transaction, get_daily_transactions
     from .email_client import EmailClient
     from .llm_processor import LLMProcessor
+    from .llama_cpp_processor import LlamaCppProcessor
     from .notifier import EmailNotifier
 except ImportError as e:
     # When run as a script
@@ -24,6 +21,7 @@ except ImportError as e:
     from database import Transaction, get_session, add_transaction, get_daily_transactions
     from email_client import EmailClient
     from llm_processor import LLMProcessor
+    from llama_cpp_processor import LlamaCppProcessor
     from notifier import EmailNotifier
 
 #pipeline-> is transaction -> is not otp or something -> is positive transaction , try spacy for credited /
@@ -78,7 +76,11 @@ def process_date_range(start_date: date, end_date: date, notify_user: bool = Tru
     
     try:
         client = EmailClient()
-        processor = LLMProcessor()
+        llm_provider = os.getenv('LLM_PROVIDER', 'openai')
+        if llm_provider == 'llama':
+            processor = LlamaCppProcessor()
+        else:
+            processor = LLMProcessor()
         
         current_date = start_date
         while current_date <= end_date:
@@ -212,7 +214,11 @@ def process_emails():
         
         # Initialize components
         email_client = EmailClient()
-        llm_processor = LLMProcessor()
+        llm_provider = os.getenv('LLM_PROVIDER', 'openai')
+        if llm_provider == 'llama':
+            llm_processor = LlamaCppProcessor()
+        else:
+            llm_processor = LLMProcessor()
         session = get_session()
         
         # Get recent emails
