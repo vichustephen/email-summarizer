@@ -34,6 +34,7 @@ app.add_middleware(
 summarizer_thread = None
 connected_clients: List[WebSocket] = []
 notify_user_global = True
+log_queue = asyncio.Queue()
 
 date_range_thread = None
 
@@ -211,6 +212,36 @@ async def broadcast_status_update():
             if client in connected_clients:
                 connected_clients.remove(client)
 
+async def broadcast_log_message(message: str):
+    """Broadcast a log message to all connected clients."""
+    log_data = {
+        "type": "log",
+        "data": message.strip()
+    }
+    for client in connected_clients[:]:
+        try:
+            await client.send_json(log_data)
+        except Exception:
+            if client in connected_clients:
+                connected_clients.remove(client)
+
+async def log_broadcast_loop():
+    """Background task to broadcast log messages."""
+    while True:
+        try:
+            message = await log_queue.get()
+            await broadcast_log_message(message)
+        except Exception as e:
+            logger.error(f"Error in log broadcast loop: {e}")
+
+class WebSocketLogSink:
+    def write(self, message):
+        try:
+            log_queue.put_nowait(message)
+        except asyncio.QueueFull:
+            # Handle queue full case if necessary, e.g., by dropping the log
+            pass
+
 async def status_broadcast_loop():
     """Background task to periodically broadcast status updates."""
     while True:
@@ -224,11 +255,18 @@ async def status_broadcast_loop():
 async def startup_event():
     """Initialize the application."""
     try:
+        # Configure Loguru to use the WebSocket sink for INFO logs
+        logger.add(WebSocketLogSink(), level="INFO", format="{message}")
+
         # Start the status broadcast loop
         asyncio.create_task(status_broadcast_loop())
         logger.info("Status broadcast loop started")
+
+        # Start the log broadcast loop
+        asyncio.create_task(log_broadcast_loop())
+        logger.info("Log broadcast loop started")
     except Exception as e:
-        logger.error(f"Error starting status broadcast loop: {e}")
+        logger.error(f"Error on startup: {e}")
 
 @app.get("/notification-preference")
 async def get_notification_preference():

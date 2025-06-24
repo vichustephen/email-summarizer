@@ -10,6 +10,8 @@ const startDateInput = document.getElementById('start-date');
 const endDateInput = document.getElementById('end-date');
 const processBtn = document.getElementById('process-btn');
 const notifyCheckbox = document.getElementById('notify-checkbox');
+const logContainer = document.getElementById('log-container'); // Add this to your HTML
+const clearLogsBtn = document.getElementById('clear-logs-btn');
 
 // Processing status elements
 const processingMessage = document.getElementById('processing-message');
@@ -21,7 +23,7 @@ const today = new Date();
 const yesterday = new Date(today);
 yesterday.setDate(today.getDate());
 const weekAgo = new Date(yesterday);
-weekAgo.setDate(yesterday.getDate() - 6);
+// weekAgo.setDate(yesterday.getDate() - 6);
 
 startDateInput.max = yesterday.toISOString().split('T')[0];
 startDateInput.min = weekAgo.toISOString().split('T')[0];
@@ -31,6 +33,25 @@ endDateInput.min = weekAgo.toISOString().split('T')[0];
 // Set default values
 startDateInput.value = weekAgo.toISOString().split('T')[0];
 endDateInput.value = yesterday.toISOString().split('T')[0];
+
+// WebSocket status updates
+// Function to append a new log message
+function appendLog(message) {
+    if (!logContainer) return;
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
+    logEntry.textContent = message;
+    logContainer.appendChild(logEntry);
+    // Auto-scroll to the bottom
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// Function to clear logs
+function clearLogs() {
+    if (logContainer) {
+        logContainer.innerHTML = '';
+    }
+}
 
 // WebSocket status updates
 function updateStatus(status) {
@@ -59,9 +80,9 @@ function updateStatus(status) {
             ? Math.round((batch.processed / batch.total_emails) * 100) 
             : 0;
        
-        if (batch.processed === batch.total_emails && batch.processing_message== 'Processing complete') {
-            showToast('Processing complete! Check your email or history tab.');
-        }
+        // if (batch.processed === batch.total_emails && batch.processing_message== 'Processing complete') {
+        //     showToast('Processing complete! Check your email or history tab.');
+        // }
         processingProgress.style.width = `${progress}%`;
         processingProgress.setAttribute('aria-valuenow', progress);
     }
@@ -174,12 +195,16 @@ startBtn.addEventListener('click', startSummarizer);
 stopBtn.addEventListener('click', stopSummarizer);
 setIntervalBtn.addEventListener('click', setInterval);
 processBtn.addEventListener('click', processDateRange);
+clearLogsBtn.addEventListener('click', clearLogs);
 
 // Initialize WebSocket connection
 setupWebSocket((data) => {
     if (data.type === 'status') {
         updateStatus(data.data);
+    } else if (data.type === 'log') {
+        appendLog(data.data);
     }
 });
 
-fetchNotificationPreference(); 
+fetchNotificationPreference();
+clearLogs(); 
