@@ -33,9 +33,9 @@ COPY frontend/ frontend/
 COPY run.py .
 
 # Create necessary directories and set permissions
-RUN mkdir -p /app/data /app/logs \
+RUN mkdir -p /app/data /app/logs /app/models \
     && touch /app/data/transactions.db \
-    && chmod -R 755 /app/data /app/logs
+    && chmod -R 755 /app/data /app/logs /app/models
 
 # Create a non-root user
 # RUN useradd -m -u 1000 appuser \
@@ -50,7 +50,8 @@ ENV DATABASE_URL=sqlite:////app/data/transactions.db \
     IMAP_PORT=993 \
     SMTP_SERVER=smtp.gmail.com \
     SMTP_PORT=587 \
-    FRONTEND_PORT=3000
+    FRONTEND_PORT=3000 \
+    LLAMA_MODEL_PATH=/app/models/Qwen_Qwen3-0.6B-Q4_K_S.gguf
 
 # 8000 is backend 3000 frontend ports
 EXPOSE 8000 3000

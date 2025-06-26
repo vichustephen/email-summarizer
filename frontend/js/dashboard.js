@@ -26,9 +26,9 @@ const weekAgo = new Date(yesterday);
 // weekAgo.setDate(yesterday.getDate() - 6);
 
 startDateInput.max = yesterday.toISOString().split('T')[0];
-startDateInput.min = weekAgo.toISOString().split('T')[0];
+//startDateInput.min = weekAgo.toISOString().split('T')[0];
 endDateInput.max = yesterday.toISOString().split('T')[0];
-endDateInput.min = weekAgo.toISOString().split('T')[0];
+//endDateInput.min = weekAgo.toISOString().split('T')[0];
 
 // Set default values
 startDateInput.value = weekAgo.toISOString().split('T')[0];

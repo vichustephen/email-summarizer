@@ -2,7 +2,7 @@
 
 **Minimal design (Tested on  Raspberry Pi 4 2GB with Qwen3 0.6b using llama cpp) automated extraction & summarisation of transaction e-mails powered by a local LLM and a modern browser dashboard.**
 
-TESTED ON HDFC/INDUSIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON ON OTHER BANK EMAILS
+TESTED ON HDFC/INDUSIND BANK EMAILS WILL UPDATE SOON ON OTHER BANK EMAILS
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal.svg) ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple.svg) ![Docker](https://img.shields.io/badge/Docker-ready-blue.svg)
 
@@ -11,14 +11,24 @@ TESTED ON HDFC/INDUSIND BANK EMAILS WITH POSTGRES FOR STORAGE. WILL UPDATE SOON 
 
 - Raspberry Pi (4 or newer recommended) Or you can use docker on any system
 - Python 3.8 or newer
-- Gmail account with OAuth 2.0 credentials or APP password
-- Sufficient storage space for the LLM model
+- Gmail account with APP password or OAuth 2.0 credentials 
 
 ## 1. Quick-start
 
 Please Setup and install llamacpp or ollama or any other local LLM and **Important properly update the ENV**
 
-### 1.1 Run with Docker (recommended)
+### 1.1 Run with Docker Compose
+
+```bash
+
+# Copy & edit configuration
+$ cp .env.example .env         # edit with your secrets & paths
+
+# Run container – maps ports & mounts your local model
+$ docker-compose up
+```
+
+### 1.2 Run with Docker
 
 ```bash
 # Build image (one-off)
@@ -32,38 +42,58 @@ $ docker run -it --rm \
     -p 8000:8000 -p 3000:3000 \
     --env-file .env \
     -v $PWD/data:/app/data \
+    -v $PWD/models:/app/models \
+    email-summarizer
+
+# Windows
+$ docker run -it --rm ^
+    -p 8000:8000 -p 3000:3000 ^
+    --env-file .env ^
+    -v "%cd%\data:/app/data" ^
+    -v "%cd%\models:/app/models" ^
     email-summarizer
 ```
 
+
 Open your browser at **http://localhost:3000** (frontend) or **http://localhost:8000/docs** (interactive API docs).
 
-### 1.2 Local development (no Docker)
+### 1.3 Local development (no Docker)
 
 ```bash
-# Backend
+
 python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn email_summarizer.api:app --reload
 
-# Frontend (static):
-cd frontend && python -m http.server 3000
+python run.py
 ```
 
 ---
-set CMAKE_GENERATOR=MinGW Makefiles
-set CMAKE_ARGS=-DGGML_OPENBLAS=on -DCMAKE_C_COMPILER=D:/ProgramFiles/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=D:/ProgramFiles/w64devkit/bin/g++.exe -DCMAKE_MAKE_PROGRAM=D:/ProgramFiles/w64devkit/bin/make.exe
 
-
-## 2. Why you need an LLM 📚
+## 2. LLM Setup
 This project relies on a **local Large Language Model** to parse natural-language e-mails and extract the monetary transactions inside them.  
 We recommend [**llama.cpp**](https://github.com/ggerganov/llama.cpp) because it is lightweight, open-source and runs fully offline.
 
-1. Install llama.cpp following their instructions (or `brew install llama.cpp` on macOS).
+1. Install llama.cpp using the instructions provided [here](https://github.com/ggerganov/llama.cpp#installation). (Best for Raspberry Pi)
 
-You can use any LLM that is compatible. You can also use tools like Ollama and LM Studio to run a local LLM. *Cloud LLMS are not recommended* as email processing contains sensitive information. 
-> 📝  The summariser **will not start** unless it can load the model.
+## 2.1 LLM Configuration
 
----
+The summariser **will not start** unless it can load the model.
+
+### 2.1.1 LLM Provider
+
+Set the ENV `LLM_PROVIDER` to one of the following:
+
+- `llama` to use `LlamaCppProcessor` with a local LLM model.
+- `openai` to use `LLMProcessor` which can connect to any OpenAI-based LLM e.g OLLAMA, llama.cpp server
+
+If using a `llama` LLM model, download your preferred gguf and put it in the models directory
+
+If using an `openai` LLM model, set the ENV `LLM_API_BASE_URL` to the base URL of the LLM API. E.g Ollama or Lm studio or llama.cpp server. AND set the ENV `LLM_MODEL` to the model name you want to use.
+*Cloud LLMS are not recommended* as email processing contains sensitive information. 
+Example:
+LLM_API_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=qwen3:0.6b
 
 ## 3. Architecture
 
@@ -201,6 +231,10 @@ If you have 2-Step Verification enabled on your Google Account, you can use an A
    - Check write permissions for SQLite database
    - Verify database path in configuration
    - Monitor disk space
+
+<!-- Windowns llama.cpp setup
+set CMAKE_GENERATOR=MinGW Makefiles
+set CMAKE_ARGS=-DGGML_OPENBLAS=on -DCMAKE_C_COMPILER=D:/ProgramFiles/w64devkit/bin/gcc.exe -DCMAKE_CXX_COMPILER=D:/ProgramFiles/w64devkit/bin/g++.exe -DCMAKE_MAKE_PROGRAM=D:/ProgramFiles/w64devkit/bin/make.exe -->
 
 ## License
 
