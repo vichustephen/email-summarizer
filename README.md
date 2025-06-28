@@ -11,7 +11,8 @@ TESTED ON HDFC/INDUSIND BANK EMAILS WILL UPDATE SOON ON OTHER BANK EMAILS
 
 - Raspberry Pi (4 or newer recommended) Or you can use docker on any system
 - Python 3.8 or newer
-- Gmail account with APP password or OAuth 2.0 credentials 
+- Gmail account with APP password or OAuth 2.0 credentials
+- llama cpp build or any local llm
 
 ## 1. Quick-start
 
@@ -55,7 +56,7 @@ $ docker run -it --rm ^
 ```
 
 
-Open your browser at **http://localhost:3000** (frontend) or **http://localhost:8000/docs** (interactive API docs).
+Open your browser at **http://localhost:3000** (frontend)
 
 ### 1.3 Local development (no Docker)
 
@@ -87,7 +88,7 @@ Set the ENV `LLM_PROVIDER` to one of the following:
 - `llama` to use `LlamaCppProcessor` with a local LLM model.
 - `openai` to use `LLMProcessor` which can connect to any OpenAI-based LLM e.g OLLAMA, llama.cpp server
 
-If using a `llama` LLM model, download your preferred gguf and put it in the models directory
+*IMPORTANT* If using  `llama` as LLM model, download your preferred gguf from hugging face and put it in the models directory
 
 If using an `openai` LLM model, set the ENV `LLM_API_BASE_URL` to the base URL of the LLM API. E.g Ollama or Lm studio or llama.cpp server. AND set the ENV `LLM_MODEL` to the model name you want to use.
 *Cloud LLMS are not recommended* as email processing contains sensitive information. 
@@ -163,7 +164,7 @@ FRONTEND_PORT=3000
 
 You can connect to your Gmail account using either OAuth 2.0 or a Google App Password. Choose the method that best suits your needs.
 
-### Option 1: OAuth 2.0 Setup for Gmail
+### Option 1: OAuth 2.0 Setup for Gmail (Not tested yet)
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
@@ -178,17 +179,15 @@ You can connect to your Gmail account using either OAuth 2.0 or a Google App Pas
 
 If you have 2-Step Verification enabled on your Google Account, you can use an App Password to allow the application to access your Gmail. This is often simpler for automated systems.
 
-1. Go to your [Google Account Security page](https://myaccount.google.com/security).
-2. Under "How you sign in to Google," select **App passwords**.
-   * If you don't see "App passwords," it might be because:
+1. Go to your [Google Account Security page](https://myaccount.google.com/apppasswords?continue=https%3A%2F%2Fmyaccount.google.com%2Fsecurity).
+2. * If you don't see "App passwords," it might be because:
      * 2-Step Verification is not set up for your account.
      * 2-Step Verification is only set up for security keys.
      * Your account is through work, school, or other organization.
      * You've turned on Advanced Protection.
-3. At the bottom, choose **Select app** and choose **Mail**.
-4. Choose **Select device** and choose **Other (Custom name)**. Enter a name like "Email Summarizer" and click **GENERATE**.
+4. Enter a name like "Email Summarizer" and click **GENERATE**.
 5. A 16-character code in a yellow bar will appear. This is your App Password. Copy this password.
-6. In your `.env` file, set `EMAIL_USERNAME` to your Gmail address and `EMAIL_PASSWORD` to this generated App Password.
+6. In your `.env` file, set `EMAIL_ADDRESS` to your Gmail address and `EMAIL_PASSWORD` to this generated App Password.
 
 ---
 
