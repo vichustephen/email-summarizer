@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import abc
 from typing import Dict, List, Optional
-
+from datetime import datetime
 from loguru import logger
 
 from email_summarizer.llm_utils import extract_json_from_response
 from email_summarizer.text_utils import is_bank_transaction, is_positive_transaction
 
 try:
-    from .database import Transaction, get_session
+    from .database import Transaction, get_session, add_transaction
     from .models.transaction import FinancialTransaction
     from .models.transactionCheck import TransactionCheck
 except ImportError:
     # Fallback for when running outside a package context
-    from database import Transaction, get_session  # type: ignore
+    from database import Transaction, get_session, add_transaction  # type: ignore
     from models.transaction import FinancialTransaction  # type: ignore
     from models.transactionCheck import TransactionCheck  # type: ignore
 
@@ -188,6 +188,18 @@ Given an email, extract the following:
                 if result.get("amount", 0) > 0:
                     result["email_id"] = email["id"]
                     transactions.append(result)
+                    
+                    # Add to database
+                    add_transaction(
+                        session,
+                        email_id=email['id'],
+                        date=datetime.now().date(),
+                        vendor=result['vendor'],
+                        amount=result['amount'],
+                        type=result['type'],
+                        category=result['category'],
+                        ref=result['ref']
+                    )
                     logger.info(f"Extracted transaction: {result.get('vendor')} - {result.get('amount')} {result.get('type')}")
 
             except Exception as e:

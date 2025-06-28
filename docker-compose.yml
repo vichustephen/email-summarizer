@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   email-summarizer:
-    image: ghcr.io/stephen26/email-summarizer:latest
+    image: stephen26/email-summarizer:latest
     #build: .
     ports:
       - "8000:8000"  # Backend Port

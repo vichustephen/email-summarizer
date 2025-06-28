@@ -110,7 +110,7 @@ class EmailNotifier:
         <body>
             <div class="container">
                 <div class="header">
-                    <h2>Daily Transaction Summary</h2>
+                    <h2>Transaction Summary</h2>
                     <p>Date: {date.strftime('%B %d, %Y')}</p>
                 </div>
         """
@@ -149,14 +149,14 @@ class EmailNotifier:
         return html
 
     def send_daily_summary(self, transactions: List[Dict], date: datetime):
-        """Send daily transaction summary email."""
+        """Send  transaction summary email."""
         if not transactions:
             logger.info("No transactions to summarize")
             return
 
         try:
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = f'Daily Transaction Summary - {date.strftime("%B %d, %Y")}'
+            msg['Subject'] = f'Transaction Summary - {date.strftime("%B %d, %Y")}'
             msg['From'] = self.email_address
             msg['To'] = self.notification_email
 
